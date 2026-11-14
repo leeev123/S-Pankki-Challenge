@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Api-key
+
+.env
+.env.*
+!.env.example
