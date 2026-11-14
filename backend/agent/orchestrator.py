@@ -1,8 +1,7 @@
 """
 Suunta-agentin orkestroija (Orchestrator).
-- Kytkee Google Geminin Function Calling -silmukalla suunta_engine-laskentaohjelmaan.
-- Kaikki euromäärät ja toimintokortit (action_cards) lasketaan deterministisesti Pythonissa.
-- Sisältää suomenkielisen varalogiikan, jos API-avain puuttuu tai yhteys epäonnistuu.
+- Valitsee automaattisesti parhaan API-avaimelle sallitun Gemini 3.8 Pro / Flash -mallin.
+- Kytkee Geminin Function Calling -silmukalla suunta_engine-laskentaohjelmaan.
 """
 
 from __future__ import annotations
@@ -32,35 +31,42 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-4-hydrogen")
-FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"
+# Oletuksena kokeillaan ensin tehokkainta Pro-mallia ja sitten nopeaa 3.8-Flashia.
+# Voit myös pakottaa mallin .env-tiedostossa: GEMINI_MODEL=gemini-3.8-pro tai GEMINI_MODEL=gemini-3.8-flash
+PREFERRED_MODELS: list[str] = [
+    "gemini-3.8-pro",
+    "gemini-3.8-pro-preview",
+    "gemini-3.8-flash",
+]
+
+_ACTIVE_MODEL: str | None = None
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
 AGENT_GUARDRAILS = """
 TÄRKEÄT SUUNTA-TOIMINTASÄÄNNÖT:
-- Älä koskaan tee henkilökohtaisia talouslaskelmia päässäsi. Kutsu aina Python-työkaluja.
-- Älä muuta tai pyöristä työkalujen palauttamia lukuja ristiriitaisesti.
-- Älä keksi action_cards-kortteja itse; käyttöliittymä muodostaa kortit suoraan Python-työkalujen palautuksista.
-- Jos käyttäjä kertoo yllättävästä menosta tai hajonneesta laitteesta (esim. pesukone, autohuolto, lääkärilasku), kutsu työkalua simulate_unexpected_expense.
-- Jos käyttäjä kysyy mistä voisi säästää, kutsu find_savings_opportunities, joka suojaa käyttäjän prioriteetit automaattisesti.
-- Kunnioita käyttäjän prioriteetteja (profile.priorities) äläkä ehdota niistä leikkaamista automaattisesti.
-- Vastaa ytimekkäästi (2–4 virkettä), ihmisläheisesti ja ilman moralisointia. Kysy korkeintaan yksi kysymys kerrallaan.
-- Älä koskaan väitä muuttaneesi budjettia automaattisesti — käyttäjä hyväksyy muutoksen itse toimintokortista.
+- Älä koskaan tee henkilökohtaisia talouslaskelmia päässäsi. Kutsu aina ensin Python-työkaluja (esim. get_financial_summary).
+- Viikkobudjetti perustuu asiakkaan keskimääräiseen arkikulutukseen ja todelliseen maksukykyyn. Älä sekoita tilin kokonaissaldoa ja viikon käyttövaraa.
+- Älä keksi action_cards-kortteja tekstiin itse; käyttöliittymä näyttää kortit suoraan työkalujen palautuksista.
+- Jos käyttäjä kertoo yllättävästä menosta (esim. autohuolto, pesukone, lääkäri), kutsu simulate_unexpected_expense.
+- Jos käyttäjä kysyy mistä voisi säästää, kutsu find_savings_opportunities.
+- Kunnioita käyttäjän prioriteetteja (profile.priorities) äläkä ehdota niistä leikkaamista.
+- Vastaa selkeällä ja luonnollisella suomen kielellä ytimekkäästi (2–4 virkettä), ilman holhoamista. Kysy korkeintaan yksi jatkokysymys.
 """.strip()
 
 TOOL_DECLARATIONS: list[types.FunctionDeclaration] = [
     types.FunctionDeclaration(
         name="get_financial_summary",
         description=(
-            "Hakee asiakkaan vahvistetun taloustilanteen: tilin saldon, viikon jäljellä olevan "
-            "käyttövaran, 3 kulutuskoria, kategoriatiedot suomeksi, 6 kk ennusteen, puskurin ja prioriteetit."
+            "Hakee asiakkaan taloustilanteen: viikon käyttövaran, keskimääräisen arkikulutuksen, "
+            "tilin saldon, 3 kulutuskoria, kategoriatiedot suomeksi, 6 kk ennusteen, puskurin ja prioriteetit."
         ),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}),
     ),
     types.FunctionDeclaration(
         name="find_savings_opportunities",
         description=(
-            "Etsii suunta_engine-laskennalla realistiset 10 % ja 20 % säästömahdollisuudet "
-            "koskematta käyttäjän tärkeiksi merkitsemiin prioriteettikategorioihin."
+            "Etsii realistiset 10 % ja 20 % säästömahdollisuudet koskematta käyttäjän "
+            "tärkeiksi merkitsemiin prioriteettikategorioihin."
         ),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}),
     ),
@@ -130,6 +136,42 @@ TOOL_DECLARATIONS: list[types.FunctionDeclaration] = [
 ]
 
 
+def get_active_model_name() -> str:
+    return _ACTIVE_MODEL or os.getenv("GEMINI_MODEL", "gemini-3.8-pro")
+
+
+def _candidate_models(client: genai.Client) -> list[str]:
+    """Muodostaa priorisoidun listan malleista (.env -> 3.8-pro -> 3.8-flash -> API-listaus)."""
+    if _ACTIVE_MODEL:
+        return [_ACTIVE_MODEL]
+
+    candidates: list[str] = []
+    env_model = os.getenv("GEMINI_MODEL", "").strip()
+    if env_model and env_model not in ("gemini-4-hydrogen", "gemini-2.5-flash"):
+        candidates.append(env_model)
+
+    for m in PREFERRED_MODELS:
+        if m not in candidates:
+            candidates.append(m)
+
+    try:
+        discovered: list[str] = []
+        for item in client.models.list():
+            raw_name = getattr(item, "name", "") or ""
+            short = raw_name.replace("models/", "").strip()
+            if short.startswith("gemini-") and "embedding" not in short and "vision" not in short:
+                discovered.append(short)
+        # Suositaan korkeinta versiota ja Pro/Flash-malleja
+        discovered.sort(key=lambda s: ("3.8" in s, "pro" in s, "flash" in s, s), reverse=True)
+        for d in discovered[:5]:
+            if d not in candidates:
+                candidates.append(d)
+    except Exception:
+        pass
+
+    return candidates
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     if value is None:
         return default
@@ -151,7 +193,6 @@ def _extract_euro_amount(text: str, default: float = 1200.0) -> float:
 
 
 def _first_part_text(content: types.Content) -> str:
-    """Lukee Content-olion ensimmäisen tekstiosan tyyppiturvallisesti."""
     parts = content.parts
     if parts and len(parts) > 0:
         txt = parts[0].text
@@ -160,8 +201,27 @@ def _first_part_text(content: types.Content) -> str:
     return ""
 
 
+def _extract_response_text(response: Any) -> str:
+    """Poimii mallin varsinaisen vastauksen ilman sisäisiä thought-osia."""
+    candidates = getattr(response, "candidates", None)
+    if candidates and len(candidates) > 0:
+        content = candidates[0].content
+        if content is not None and content.parts:
+            visible_chunks: list[str] = []
+            for part in content.parts:
+                if getattr(part, "thought", False):
+                    continue
+                txt = getattr(part, "text", None)
+                if isinstance(txt, str) and txt.strip():
+                    visible_chunks.append(txt.strip())
+            if visible_chunks:
+                return "\n\n".join(visible_chunks).strip()
+
+    raw_text = getattr(response, "text", None)
+    return raw_text.strip() if isinstance(raw_text, str) else ""
+
+
 def _build_gemini_contents(history: list[dict[str, Any]], user_message: str) -> list[types.Content]:
-    """Muuntaa keskusteluhistorian vuorotteleviksi user/model-viesteiksi ilman duplikaatteja."""
     contents: list[types.Content] = []
     recent = history[-12:] if history else []
 
@@ -235,18 +295,30 @@ def _execute_tool(
     return {"error": f"Tuntematon työkalu: {tool_name}"}, None
 
 
-def _generate_with_model_fallback(
+def _generate_with_best_model(
     client: genai.Client,
     contents: list[types.Content],
     config: types.GenerateContentConfig,
 ) -> Any:
-    try:
-        return client.models.generate_content(model=GEMINI_MODEL, contents=contents, config=config)
-    except Exception as primary_exc:
-        if GEMINI_MODEL != FALLBACK_GEMINI_MODEL:
-            logger.info("Kokeillaan varamallia %s (%s)", FALLBACK_GEMINI_MODEL, primary_exc)
-            return client.models.generate_content(model=FALLBACK_GEMINI_MODEL, contents=contents, config=config)
-        raise
+    global _ACTIVE_MODEL
+    last_exc: Exception | None = None
+
+    for model_name in _candidate_models(client):
+        try:
+            resp = client.models.generate_content(model=model_name, contents=contents, config=config)
+            if _ACTIVE_MODEL != model_name:
+                _ACTIVE_MODEL = model_name
+                logger.warning("Suunta AI kayttaa nyt kielimallia: %s", model_name)
+            return resp
+        except Exception as exc:
+            last_exc = exc
+            if _ACTIVE_MODEL == model_name:
+                _ACTIVE_MODEL = None
+            continue
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Yhtaan toimivaa Gemini-mallia ei loytynyt.")
 
 
 def _run_gemini_agent(
@@ -270,12 +342,11 @@ def _run_gemini_agent(
     final_reply = ""
 
     for _step in range(5):
-        response = _generate_with_model_fallback(client, contents, config)
+        response = _generate_with_best_model(client, contents, config)
 
         function_calls = response.function_calls or []
         if not function_calls:
-            raw_text = response.text
-            final_reply = raw_text.strip() if isinstance(raw_text, str) else ""
+            final_reply = _extract_response_text(response)
             break
 
         candidates = response.candidates
@@ -330,8 +401,7 @@ def _run_fallback_agent(statement_id: str, user_message: str) -> dict[str, Any]:
         sim = tool_simulate_purchase(statement_id, item, price)
         priorities = ", ".join(snap.get("profile", {}).get("priorities", [])) or "omat prioriteettisi"
         reply = (
-            f"Simuloin kohteen **{item} ({price:.0f} €)** suhteessa S-Tilisi saldoon ({snap['account_balance_eur']:.2f} €) "
-            f"ja viikon käyttövaraasi ({snap['weekly_safe_to_spend_eur']:.2f} €).\n\n"
+            f"Simuloin kohteen **{item} ({price:.0f} €)** suhteessa viikon käyttövaraasi ({snap['weekly_safe_to_spend_eur']:.2f} €).\n\n"
             f"Pidän sinulle tärkeät asiat (**{priorities}**) suojattuina. Valitse alta sopivin toteutustapa:"
         )
         return {"reply": reply, "action_cards": list(sim.get("options", []))}
@@ -350,22 +420,9 @@ def _run_fallback_agent(statement_id: str, user_message: str) -> dict[str, Any]:
         )
         return {"reply": reply, "action_cards": cards}
 
-    if any(w in msg for w in ("millainen kuluttaja", "minne rahani", "korit", "analysoi", "profiili")):
-        b = snap["baskets_30d"]
-        cats = snap["everyday_categories_30d"]
-        top_cat = next(iter(cats.items()), ("Ruokakauppa", 0.0))
-        reply = (
-            f"Viimeisen 30 päivän menot jakautuvat kolmeen koriin:\n"
-            f"• **Välttämättömät säännölliset:** {b['mandatory_regular_eur']:.0f} €\n"
-            f"• **Välttämättömät epäsäännölliset:** {b['mandatory_irregular_eur']:.0f} €\n"
-            f"• **Arjen kulutus:** {b['everyday_spent_eur']:.0f} € (suurin erä: **{top_cat[0]} {top_cat[1]:.0f} €**)\n\n"
-            f"Viikon jäljellä oleva käyttövarasi on **{snap['weekly_safe_to_spend_eur']:.2f} €**."
-        )
-        return {"reply": reply, "action_cards": []}
-
     reply = (
         f"Tämän viikon jäljellä oleva käyttövarasi on **{snap['weekly_safe_to_spend_eur']:.2f} €** "
-        f"(noin **{snap['daily_safe_to_spend_eur']:.2f} €/pv**), ja puskurissasi on **{snap['profile'].get('current_buffer_eur', 850):.0f} €**.\n\n"
+        f"(keskimääräinen viikkobudjettisi on **{snap['weekly_budget_eur']:.2f} €**).\n\n"
         f"Voit kysyä esimerkiksi hankinnan suunnittelusta, säästöpotentiaalista tai kulutusprofiilistasi."
     )
     return {"reply": reply, "action_cards": []}
@@ -381,6 +438,6 @@ def run_agent(
         try:
             return _run_gemini_agent(statement_id, user_message, history)
         except Exception as exc:
-            logger.warning("Gemini-kutsu epäonnistui, käytetään varalogiikkaa: %s", exc)
+            logger.warning("Gemini-kutsu epaonnistui, kaytetaan varalogiikkaa: %s", exc)
 
     return _run_fallback_agent(statement_id, user_message)

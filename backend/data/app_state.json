@@ -2,49 +2,24 @@
   "profiles": {
     "CUST_STUDENT_01": {
       "statement_id": "CUST_STUDENT_01",
-      "display_name": "Tuotu tiliote",
+      "display_name": "Asiakas",
       "file_name": null,
       "suunta_enabled": true,
       "onboarded": false,
       "priorities": [
         "Laadukas arkiruoka",
-        "Säästäminen"
+        "Liikunta & harrastukset"
       ],
       "cut_from": [
         "Kahvilat",
         "Taksit"
       ],
-      "monthly_savings_target_eur": 309.92,
-      "buffer_target_eur": 1500.0,
-      "current_buffer_eur": 850.0,
-      "everyday_adjustment_eur": -109.92,
-      "bonus_eur": 6.84,
-      "bonus_next_tier_eur": 58.08,
-      "active_goal": {
-        "name": "pyörä",
-        "target_eur": 1000.0
-      }
-    },
-    "CUST_FAMILY_DAD_01": {
-      "statement_id": "CUST_FAMILY_DAD_01",
-      "display_name": "Tuotu tiliote",
-      "file_name": null,
-      "suunta_enabled": true,
-      "onboarded": false,
-      "priorities": [
-        "Laadukas arkiruoka",
-        "Säästäminen"
-      ],
-      "cut_from": [
-        "Kahvilat",
-        "Taksit"
-      ],
-      "monthly_savings_target_eur": 200.0,
+      "monthly_savings_target_eur": 150.0,
       "buffer_target_eur": 1500.0,
       "current_buffer_eur": 850.0,
       "everyday_adjustment_eur": 0.0,
-      "bonus_eur": 6.84,
-      "bonus_next_tier_eur": 58.08,
+      "bonus_eur": 23.4,
+      "bonus_next_tier_eur": 56.7,
       "active_goal": null
     }
   },
@@ -52,165 +27,48 @@
     "CUST_STUDENT_01": [
       {
         "role": "user",
-        "content": "Haluun tonnin tsygän",
+        "content": "Haluaisin säästää tietokonetta varten.",
         "action_cards": []
       },
       {
         "role": "assistant",
-        "content": "Tämän viikon jäljellä oleva käyttövarasi on **-1.07 €** (noin **0.00 €/pv**), ja puskurissasi on **850 €**.\n\nVoit kysyä esimerkiksi hankinnan suunnittelusta, säästöpotentiaalista tai kulutusprofiilistasi.",
-        "action_cards": []
-      },
-      {
-        "role": "user",
-        "content": "1000 euron polkupyörä. Miten kauan kantsii säästää",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Simuloin kohteen **pyörä (1000 €)** suhteessa S-Tilisi saldoon (2910.72 €) ja viikon käyttövaraasi (-1.07 €).\n\nPidän sinulle tärkeät asiat (**Laadukas arkiruoka, Säästäminen**) suojattuina. Valitse alta sopivin toteutustapa:",
+        "content": "Simuloin kohteen **hankinta (1200 €)** suhteessa viikon käyttövaraasi (-10.30 €).\n\nPidän sinulle tärkeät asiat (**Laadukas arkiruoka, Liikunta & harrastukset**) suojattuina. Valitse alta sopivin toteutustapa:",
         "action_cards": [
           {
-            "plan_id": "save_steady_1000",
-            "title": "Säästä rauhassa (5 kk)",
-            "summary": "Pidät nykyisen 42 €/vk käyttövaran ennallaan ja saavutat 1000 € tavoitteen 5 kuukaudessa.",
-            "impact_weekly_eur": 0.0,
-            "impact_savings_months": 5,
-            "monthly_savings_delta_eur": 0.0,
-            "everyday_budget_delta_eur": 0.0,
-            "buffer_delta_eur": 0.0,
-            "goal_name": "pyörä",
-            "goal_target_eur": 1000.0
-          },
-          {
-            "plan_id": "trim_everyday_1000",
-            "title": "Tavoite nopeammin (4 kk)",
-            "summary": "Siirrät 23 €/vk (100 €/kk) ei-kriittisestä arjen kulutuksesta kohteeseen pyörä.",
-            "impact_weekly_eur": -23.08,
-            "impact_savings_months": 4,
-            "monthly_savings_delta_eur": 100.0,
-            "everyday_budget_delta_eur": -100.0,
-            "buffer_delta_eur": 0.0,
-            "goal_name": "pyörä",
-            "goal_target_eur": 1000.0
-          },
-          {
-            "plan_id": "hybrid_buffer_1000",
-            "title": "Hyödynnä puskuria & täydennä",
-            "summary": "Käytät 500 € puskurista nyt ja palautat sen ohjaamalla +75 €/kk (17 €/vk) takaisin puskuriin.",
-            "impact_weekly_eur": -17.31,
-            "impact_savings_months": 1,
-            "monthly_savings_delta_eur": 75.0,
-            "everyday_budget_delta_eur": -75.0,
-            "buffer_delta_eur": -500.0,
-            "goal_name": "Puskurin palautus (pyörä)",
-            "goal_target_eur": 500.0
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": "Paljonko voin käyttää tällä viikolla?",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Tämän viikon jäljellä oleva käyttövarasi on **-1.07 €** (noin **0.00 €/pv**), ja puskurissasi on **850 €**.\n\nVoit kysyä esimerkiksi hankinnan suunnittelusta, säästöpotentiaalista tai kulutusprofiilistasi.",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Suunnitelma **Tavoite nopeammin (4 kk)** hyväksytty! Päivitin viikoittaisen käyttövarasi ja tavoitteesi.",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Suunnitelma **Säästä rauhassa (5 kk)** hyväksytty! Päivitin viikoittaisen käyttövarasi ja tavoitteesi.",
-        "action_cards": []
-      },
-      {
-        "role": "user",
-        "content": "Paljonko voin käyttää tällä viikolla?",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Tämän viikon jäljellä oleva käyttövarasi on **-1.07 €** (noin **0.00 €/pv**), ja puskurissasi on **850 €**.\n\nVoit kysyä esimerkiksi hankinnan suunnittelusta, säästöpotentiaalista tai kulutusprofiilistasi.",
-        "action_cards": []
-      },
-      {
-        "role": "user",
-        "content": "Paljonko säästän jos vähennän ravintoloita 20 %?",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Viimeisen 30 päivän aikana kategoriaan **Ravintolat** kului **49.60 €**.\n\nVähentämällä sitä **20 %** vapautat **9.92 €/kk** (**119 €/vuosi**).",
-        "action_cards": [
-          {
-            "plan_id": "cut_restaurants_20",
-            "title": "Lukitse +10 €/kk säästö (Ravintolat)",
-            "summary": "Vähennät kategoriaa ravintolat 20 % ja siirrät 9.92 €/kk säästöön.",
-            "impact_weekly_eur": -2.29,
-            "impact_savings_months": null,
-            "monthly_savings_delta_eur": 9.92,
-            "everyday_budget_delta_eur": -9.92,
-            "buffer_delta_eur": 0.0,
-            "goal_name": null,
-            "goal_target_eur": null
-          }
-        ]
-      },
-      {
-        "role": "assistant",
-        "content": "Suunnitelma **Lukitse +10 €/kk säästö (Ravintolat)** hyväksytty! Päivitin viikoittaisen käyttövarasi ja tavoitteesi.",
-        "action_cards": []
-      }
-    ],
-    "CUST_FAMILY_DAD_01": [
-      {
-        "role": "user",
-        "content": "Haluisin ostaa auton. Vaikka 3000 e. Kauanko kannattaisi säästää?",
-        "action_cards": []
-      },
-      {
-        "role": "assistant",
-        "content": "Simuloin kohteen **hankinta (3000 €)** suhteessa S-Tilisi saldoon (4250.90 €) ja viikon käyttövaraasi (152.04 €).\n\nPidän sinulle tärkeät asiat (**Laadukas arkiruoka, Säästäminen**) suojattuina. Valitse alta sopivin toteutustapa:",
-        "action_cards": [
-          {
-            "plan_id": "save_steady_3000",
-            "title": "Säästä rauhassa (15 kk)",
-            "summary": "Pidät nykyisen 405 €/vk käyttövaran ennallaan ja saavutat 3000 € tavoitteen 15 kuukaudessa.",
-            "impact_weekly_eur": 0.0,
-            "impact_savings_months": 15,
-            "monthly_savings_delta_eur": 0.0,
-            "everyday_budget_delta_eur": 0.0,
+            "plan_id": "save_steady_1200",
+            "title": "Tasainen säästö (24 kk)",
+            "summary": "Säästät 50 €/kk ja saavutat kohteen hankinta (1200 €) 24 kuukaudessa.",
+            "impact_weekly_eur": -11.54,
+            "impact_savings_months": 24,
+            "monthly_savings_delta_eur": 50.0,
+            "everyday_budget_delta_eur": -50.0,
             "buffer_delta_eur": 0.0,
             "goal_name": "hankinta",
-            "goal_target_eur": 3000.0
+            "goal_target_eur": 1200.0
           },
           {
-            "plan_id": "trim_everyday_3000",
-            "title": "Tavoite nopeammin (10 kk)",
-            "summary": "Siirrät 23 €/vk (100 €/kk) ei-kriittisestä arjen kulutuksesta kohteeseen hankinta.",
-            "impact_weekly_eur": -23.08,
+            "plan_id": "trim_everyday_1200",
+            "title": "Nopeutettu tavoite (10 kk)",
+            "summary": "Nipistät arjen ei-kriittisistä menoista 30 €/vk ja saavutat kohteen hankinta 10 kuukaudessa.",
+            "impact_weekly_eur": -30.0,
             "impact_savings_months": 10,
-            "monthly_savings_delta_eur": 100.0,
-            "everyday_budget_delta_eur": -100.0,
+            "monthly_savings_delta_eur": 130.0,
+            "everyday_budget_delta_eur": -130.0,
             "buffer_delta_eur": 0.0,
             "goal_name": "hankinta",
-            "goal_target_eur": 3000.0
+            "goal_target_eur": 1200.0
           },
           {
-            "plan_id": "hybrid_buffer_3000",
+            "plan_id": "hybrid_buffer_1200",
             "title": "Hyödynnä puskuria & täydennä",
-            "summary": "Käytät 850 € puskurista nyt ja palautat sen ohjaamalla +75 €/kk (17 €/vk) takaisin puskuriin.",
-            "impact_weekly_eur": -17.31,
+            "summary": "Käytät puskurista 600 € ja palautat sen ohjaamalla +60 €/kk (14 €/vk) takaisin puskuriin.",
+            "impact_weekly_eur": -13.85,
             "impact_savings_months": 1,
-            "monthly_savings_delta_eur": 75.0,
-            "everyday_budget_delta_eur": -75.0,
-            "buffer_delta_eur": -850.0,
+            "monthly_savings_delta_eur": 60.0,
+            "everyday_budget_delta_eur": -60.0,
+            "buffer_delta_eur": -600.0,
             "goal_name": "Puskurin palautus (hankinta)",
-            "goal_target_eur": 850.0
+            "goal_target_eur": 600.0
           }
         ]
       }

@@ -20,25 +20,25 @@ def _save_db(data: dict[str, Any]) -> None:
 
 
 def get_profile(statement_id: str) -> dict[str, Any]:
-    """Hakee tuodun tiliotteen profiilin tai alustaa puhtaan Suunta-oletusprofiilin."""
+    """Hakee profiilin tai alustaa puhtaan Suunta-oletusprofiilin."""
     db = _load_db()
     if statement_id in db["profiles"]:
         return db["profiles"][statement_id]
 
     return {
         "statement_id": statement_id,
-        "display_name": "Tuotu tiliote",
+        "display_name": "Asiakas",
         "file_name": None,
         "suunta_enabled": False,
         "onboarded": False,
-        "priorities": ["Laadukas arkiruoka", "Säästäminen"],
+        "priorities": ["Laadukas arkiruoka", "Liikunta & harrastukset"],
         "cut_from": ["Kahvilat", "Taksit"],
-        "monthly_savings_target_eur": 200.0,
+        "monthly_savings_target_eur": 150.0,
         "buffer_target_eur": 1500.0,
         "current_buffer_eur": 850.0,
         "everyday_adjustment_eur": 0.0,
-        "bonus_eur": 6.84,
-        "bonus_next_tier_eur": 58.08,
+        "bonus_eur": 23.40,
+        "bonus_next_tier_eur": 56.70,
         "active_goal": None,
     }
 
@@ -65,8 +65,13 @@ def append_history(statement_id: str, message: dict[str, Any]) -> list[dict[str,
 
 
 def reset_statement_state(statement_id: str) -> None:
-    """Nollaa yhden tilioteistunnon profiilin ja keskusteluhistorian."""
+    """Nollaa yhden asiakasprofiilin tilan ja keskustelut."""
     db = _load_db()
     db["profiles"].pop(statement_id, None)
     db["histories"].pop(statement_id, None)
     _save_db(db)
+
+
+def reset_all_state() -> None:
+    """Tyhjentää koko app_state.json-tiedoston uloskirjautumisen yhteydessä."""
+    _save_db({"profiles": {}, "histories": {}})

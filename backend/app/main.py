@@ -5,8 +5,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from agent.orchestrator import GEMINI_MODEL, run_agent
-from app.database import append_history, get_history, get_profile, save_profile
+from agent.orchestrator import get_active_model_name, run_agent
+from app.database import (
+    append_history,
+    get_history,
+    get_profile,
+    reset_all_state,
+    reset_statement_state,
+    save_profile,
+)
 from app.schemas import ApplyPlanRequest, ChatRequest, ChatResponse, OnboardingRequest
 from finance.engine import (
     SAMPLE_CUST_PATH,
@@ -30,7 +37,6 @@ app.add_middleware(
 
 @app.middleware("http")
 async def disable_static_cache(request: Request, call_next):
-    """Estää selainta näyttämästä vanhaa HTML/CSS/JS-tiedostoa välimuistista."""
     response = await call_next(request)
     if not request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -44,14 +50,13 @@ def api_health():
     return {
         "ok": True,
         "agent_ready": bool(key and key != "your_api_key_here"),
-        "model": GEMINI_MODEL,
+        "model": get_active_model_name(),
         "sample_db_exists": SAMPLE_TX_PATH.exists() and SAMPLE_CUST_PATH.exists(),
     }
 
 
 @app.get("/api/customers")
 def api_customers():
-    """Palauttaa datakansion 3 profiilia: Opiskelija, Työssäkäyvä, Eläkeläinen."""
     try:
         return {"customers": list_customers()}
     except FileNotFoundError as exc:
@@ -71,7 +76,6 @@ def api_state(statement_id: str):
 
 @app.post("/api/onboarding")
 def api_onboarding(payload: OnboardingRequest):
-    """Tallentaa käyttäjän henkilökohtaiset arvot sekä tavoitteen ja aktivoi Suunnan."""
     profile = get_profile(payload.statement_id)
     profile.update({
         "suunta_enabled": payload.suunta_enabled,
@@ -90,11 +94,26 @@ def api_onboarding(payload: OnboardingRequest):
 
 @app.post("/api/toggle-suunta/{statement_id}")
 def api_toggle_suunta(statement_id: str, enabled: bool = True):
-    """Vaihtaa perinteisen S-mobiilin ja Suunta-näkymän välillä ilman pop-upia."""
     profile = get_profile(statement_id)
     profile["suunta_enabled"] = enabled
     save_profile(statement_id, profile)
     return {"snapshot": get_financial_snapshot(statement_id)}
+
+
+@app.post("/api/reset/{statement_id}")
+def api_reset_statement(statement_id: str):
+    reset_statement_state(statement_id)
+    return {
+        "snapshot": get_financial_snapshot(statement_id),
+        "history": get_history(statement_id),
+    }
+
+
+@app.post("/api/reset-all")
+def api_reset_all():
+    """Nollaa koko app_state.json-tilan uloskirjautuessa tai uutta istuntoa aloitettaessa."""
+    reset_all_state()
+    return {"ok": True}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -119,9 +138,11 @@ def api_chat(payload: ChatRequest):
 @app.post("/api/apply-plan")
 def api_apply_plan(payload: ApplyPlanRequest):
     profile = get_profile(payload.statement_id)
-    profile["monthly_savings_target_eur"] = max(
-        0.0, float(profile.get("monthly_savings_target_eur", 200.0)) + payload.monthly_savings_delta_eur
-    )
+    snap = get_financial_snapshot(payload.statement_id)
+    base_savings = float(snap["baskets_30d"]["monthly_savings_target_eur"])
+
+    profile["onboarded"] = True
+    profile["monthly_savings_target_eur"] = max(0.0, base_savings + payload.monthly_savings_delta_eur)
     profile["everyday_adjustment_eur"] = (
         float(profile.get("everyday_adjustment_eur", 0.0)) + payload.everyday_budget_delta_eur
     )
@@ -135,7 +156,7 @@ def api_apply_plan(payload: ApplyPlanRequest):
         }
     save_profile(payload.statement_id, profile)
 
-    confirm_msg = f"Suunnitelma **{payload.title}** hyväksytty! Päivitin viikoittaisen käyttövarasi ja tavoitteesi."
+    confirm_msg = f"Suunnitelma **{payload.title}** otettu käyttöön. Päivitin viikoittaisen käyttövarasi ja tavoitteesi."
     append_history(payload.statement_id, {"role": "assistant", "content": confirm_msg, "action_cards": []})
     return {"snapshot": get_financial_snapshot(payload.statement_id), "history": get_history(payload.statement_id)}
 
