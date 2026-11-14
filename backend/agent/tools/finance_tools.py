@@ -1,5 +1,5 @@
 """
-Työkalut (Tools), joita kaveriesi rakentama AI-agentti voi kutsua.
+Työkalut (Tools), joita AI-agentti voi kutsua.
 Python hoitaa kaiken tarkan laskennan ja agentti selittää tulokset käyttäjälle.
 """
 

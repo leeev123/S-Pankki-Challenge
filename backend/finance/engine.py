@@ -116,7 +116,7 @@ def list_customers(limit: int = 20) -> list[dict[str, Any]]:
     """Listaa asiakkaat CSV-tiedostosta."""
     _, cust_path = _resolve_csv_paths()
     df = pd.read_csv(cust_path, nrows=limit)
-    return df.to_dict(orient="records")
+    return df.to_dict(orient="records") # type: ignore
 
 
 @lru_cache(maxsize=16)
