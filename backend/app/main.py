@@ -1,8 +1,3 @@
-"""
-FastAPI-sovelluksen pääreitit ja staattisen frontendin tarjoaminen.
-Käynnistys backend/-kansiosta: uvicorn app.main:app --reload
-"""
-
 from pathlib import Path
 import shutil
 from dotenv import load_dotenv
@@ -15,7 +10,6 @@ from app.database import append_history, get_history, get_profile, save_profile
 from app.schemas import ApplyPlanRequest, ChatRequest, ChatResponse, OnboardingRequest
 from finance.engine import DATA_DIR, get_financial_snapshot, list_customers, load_customer_transactions
 
-# Ladataan mahdolliset API-avaimet .env-tiedostosta
 load_dotenv()
 
 app = FastAPI(title="S-AI / Urho API")
@@ -30,13 +24,11 @@ app.add_middleware(
 
 @app.get("/api/customers")
 def api_customers():
-    """Listaa saatavilla olevat asiakkaat demokäyttöön."""
     return {"customers": list_customers()}
 
 
 @app.get("/api/state/{customer_id}")
 def api_state(customer_id: str):
-    """Palauttaa etusivun luvut (viikon käyttövara, 3 koria, kuitit) ja chattihistorian."""
     return {
         "snapshot": get_financial_snapshot(customer_id),
         "history": get_history(customer_id),
@@ -45,10 +37,7 @@ def api_state(customer_id: str):
 
 @app.post("/api/upload-excel/{customer_id}")
 async def api_upload_excel(customer_id: str, file: UploadFile = File(...)):
-    """
-    Vastaanottaa käyttäjän lataaman Excel-tiliotteen (.xlsx), tallentaa sen
-    backend/data/-kansioon ja päivittää kaikki käyttövaralaskelmat heti.
-    """
+    """Tallentaa käyttäjän lataaman Excel-tiliotteen (.xlsx) ja päivittää luvut heti."""
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Lataa .xlsx-muotoinen Excel-tiedosto.")
 
@@ -58,7 +47,6 @@ async def api_upload_excel(customer_id: str, file: UploadFile = File(...)):
     with target_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Tyhjennetään välimuisti, jotta uusi Excel luetaan heti käyttöön
     load_customer_transactions.cache_clear()
 
     try:
@@ -72,7 +60,7 @@ async def api_upload_excel(customer_id: str, file: UploadFile = File(...)):
         customer_id,
         {
             "role": "assistant",
-            "content": f"Uusi Excel-tiliote **{file.filename}** ladattu! Päivitin kolme kulutuskoria ja viikoittaisen käyttövarasi.",
+            "content": f"Uusi Excel-tiliote **{file.filename}** ladattu! Analysoin kolme kulutuskoria ja viikoittaisen käyttövarasi.",
             "action_cards": [],
         },
     )
@@ -81,9 +69,10 @@ async def api_upload_excel(customer_id: str, file: UploadFile = File(...)):
 
 @app.post("/api/onboarding")
 def api_onboarding(payload: OnboardingRequest):
-    """Tallentaa käyttäjän arvot, prioriteetit ja kuukausisäästötavoitteen."""
+    """Aktivoi S-AI:n ja tallentaa käyttäjän henkilökohtaiset arvot sekä tavoitteen."""
     profile = get_profile(payload.customer_id)
     profile.update({
+        "s_ai_enabled": payload.s_ai_enabled,
         "onboarded": True,
         "priorities": payload.priorities,
         "cut_from": payload.cut_from,
@@ -97,9 +86,17 @@ def api_onboarding(payload: OnboardingRequest):
     return {"snapshot": get_financial_snapshot(payload.customer_id)}
 
 
+@app.post("/api/toggle-sai/{customer_id}")
+def api_toggle_sai(customer_id: str, enabled: bool = True):
+    """Vaihtaa perinteisen S-mobiilin ja S-AI-näkymän välillä."""
+    profile = get_profile(customer_id)
+    profile["s_ai_enabled"] = enabled
+    save_profile(customer_id, profile)
+    return {"snapshot": get_financial_snapshot(customer_id)}
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 def api_chat(payload: ChatRequest):
-    """Välittää käyttäjän viestin AI-agentille ja palauttaa vastauksen + toimintokortit."""
     append_history(payload.customer_id, {"role": "user", "content": payload.message, "action_cards": []})
     history = get_history(payload.customer_id)
 
@@ -118,7 +115,6 @@ def api_chat(payload: ChatRequest):
 
 @app.post("/api/apply-plan")
 def api_apply_plan(payload: ApplyPlanRequest):
-    """Päivittää elävän budjetin pysyvästi, kun käyttäjä hyväksyy suunnitelman."""
     profile = get_profile(payload.customer_id)
     profile["monthly_savings_target_eur"] = max(
         0.0, float(profile.get("monthly_savings_target_eur", 250.0)) + payload.monthly_savings_delta_eur
@@ -141,7 +137,6 @@ def api_apply_plan(payload: ApplyPlanRequest):
     return {"snapshot": get_financial_snapshot(payload.customer_id), "history": get_history(payload.customer_id)}
 
 
-# Tarjoillaan frontend/-kansion tiedostot suoraan osoitteesta http://127.0.0.1:8000
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

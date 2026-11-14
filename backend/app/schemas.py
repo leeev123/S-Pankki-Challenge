@@ -3,8 +3,9 @@ from pydantic import BaseModel, Field
 
 
 class OnboardingRequest(BaseModel):
-    """Käyttöönotossa lähetettävät käyttäjän arvot, leikkauskohteet ja säästötavoite."""
-    customer_id: str = "CUST_001"
+    """Käyttöönotossa lähetettävät käyttäjän arvot, leikkauskohteet ja S-AI:n aktivointitila."""
+    customer_id: str = "CUST_ANNI"
+    s_ai_enabled: bool = True
     monthly_income_eur: float | None = None
     priorities: list[str] = Field(default_factory=lambda: ["Laadukas arkiruoka", "Säästäminen"])
     cut_from: list[str] = Field(default_factory=lambda: ["Kahvilat", "Noutoruoka"])
@@ -14,13 +15,13 @@ class OnboardingRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     """Käyttäjän chat-viesti backendille."""
-    customer_id: str = "CUST_001"
+    customer_id: str = "CUST_ANNI"
     message: str
 
 
 class ApplyPlanRequest(BaseModel):
-    """Kun käyttäjä hyväksyy AI:n ehdottaman budjettivaihtoehdon, lähetetään nämä muutokset."""
-    customer_id: str = "CUST_001"
+    """Kun käyttäjä hyväksyy AI:n ehdottaman budjettivaihtoehdon."""
+    customer_id: str = "CUST_ANNI"
     plan_id: str
     title: str
     monthly_savings_delta_eur: float = 0.0
@@ -31,7 +32,7 @@ class ApplyPlanRequest(BaseModel):
 
 
 class AgentActionCard(BaseModel):
-    """Chat-kuplan sisällä näytettävä interaktiivinen vaihtoehtokortti ('Hyväksy suunnitelma')."""
+    """Chat-kuplan sisällä näytettävä toimintokortti ('Hyväksy suunnitelma')."""
     plan_id: str
     title: str
     summary: str
@@ -44,15 +45,8 @@ class AgentActionCard(BaseModel):
     goal_target_eur: float | None = None
 
 
-class ChatMessage(BaseModel):
-    """Yksittäinen viesti keskusteluhistoriassa."""
-    role: Literal["user", "assistant"]
-    content: str
-    action_cards: list[AgentActionCard] = Field(default_factory=list)
-
-
 class ChatResponse(BaseModel):
-    """API:n vastaus chat-viestiin: teksti, toimintokortit ja päivitetty taloustilanne."""
+    """API:n vastaus chat-viestiin."""
     reply: str
     action_cards: list[AgentActionCard] = Field(default_factory=list)
     updated_state: dict[str, Any]
