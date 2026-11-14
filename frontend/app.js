@@ -1,68 +1,102 @@
-function getStatementSessionId() {
-  const key = "suunta_statement_id";
-  let id = localStorage.getItem(key);
-  if (!id || !/^[a-zA-Z0-9_-]{4,40}$/.test(id)) {
-    id = "stmt_" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
-
-const currentStatementId = getStatementSessionId();
+let currentCustomerId = null;
 let currentSnapshot = null;
+let currentHistory = [];
 let detailsVisible = true;
+let isSending = false;
 
 const fmtEur = (n) => Number(n || 0).toFixed(2).replace(".", ",") + " €";
 
-window.addEventListener("DOMContentLoaded", async () => {
-  const res = await fetch(`/api/state/${currentStatementId}`);
-  const data = await res.json();
-  currentSnapshot = data.snapshot;
-
-  if (currentSnapshot.has_uploaded_statement) {
-    document.getElementById("statementGate").classList.add("hidden");
-    document.getElementById("appShell").classList.remove("hidden");
-    renderSnapshot(data.snapshot);
-    renderHistory(data.history);
-  }
-});
-
-function openStatementGate() {
-  document.getElementById("appShell").classList.add("hidden");
-  document.getElementById("statementGate").classList.remove("hidden");
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-async function uploadStatementFromGate(input) {
-  if (!input.files.length) return;
-  const statusEl = document.getElementById("gateStatus");
-  statusEl.textContent = "Ladataan ja analysoidaan tiliotetta...";
+function formatMessageText(text) {
+  return escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+}
 
-  const ok = await uploadStatementFile(input.files[0], statusEl);
-  input.value = "";
-  if (ok) {
-    document.getElementById("statementGate").classList.add("hidden");
-    document.getElementById("appShell").classList.remove("hidden");
-    await loadState();
-    if (!currentSnapshot.profile.suunta_enabled) {
-      openActivatePrompt();
+window.addEventListener("DOMContentLoaded", async () => {
+  await loadProfileGate();
+});
+
+async function loadProfileGate() {
+  const listEl = document.getElementById("profileList");
+  const statusEl = document.getElementById("gateStatus");
+  try {
+    const res = await fetch("/api/customers");
+    if (!res.ok) throw new Error("Profiilien haku epäonnistui");
+    const data = await res.json();
+    const customers = data.customers || [];
+
+    if (!customers.length) {
+      listEl.innerHTML = `<div class="gate-status">Profiileja ei löytynyt datakansiosta.</div>`;
+      return;
     }
+
+    listEl.innerHTML = customers
+      .map((c) => {
+        const iconSvg =
+          c.role_label === "Opiskelija"
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`
+            : c.role_label === "Eläkeläinen"
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`;
+
+        const titleText =
+          c.display_name === c.role_label
+            ? c.display_name
+            : `${c.role_label} (${c.display_name})`;
+
+        return `
+          <button class="persona-card" onclick="selectProfile('${escapeHtml(c.customer_id)}')">
+            <div class="persona-icon">${iconSvg}</div>
+            <div class="persona-info">
+              <strong>${escapeHtml(titleText)}</strong>
+              <span>${escapeHtml(c.customer_age)} v · Postinumero ${escapeHtml(c.customer_postal_code)} · Saldo ${fmtEur(c.account_balance_eur)}</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>`;
+      })
+      .join("");
+    statusEl.textContent = "";
+  } catch (err) {
+    listEl.innerHTML = "";
+    statusEl.textContent = `Virhe profiilien latauksessa: ${err.message}`;
   }
+}
+
+async function selectProfile(customerId) {
+  currentCustomerId = customerId;
+  document.getElementById("profileGate").classList.add("hidden");
+  document.getElementById("appShell").classList.remove("hidden");
+  switchTab("home");
+  await loadState();
+}
+
+function openProfileGate() {
+  document.getElementById("appShell").classList.add("hidden");
+  document.getElementById("profileGate").classList.remove("hidden");
 }
 
 async function loadState() {
-  const res = await fetch(`/api/state/${currentStatementId}`);
+  if (!currentCustomerId) return;
+  const res = await fetch(`/api/state/${encodeURIComponent(currentCustomerId)}`);
   const data = await res.json();
   currentSnapshot = data.snapshot;
-  renderSnapshot(data.snapshot);
-  renderHistory(data.history);
+  currentHistory = data.history || [];
+  renderSnapshot(currentSnapshot);
+  renderHistory(currentHistory);
 }
 
 function renderSnapshot(s) {
   const p = s.profile || {};
   const suuntaEnabled = Boolean(p.suunta_enabled);
 
-  const badge = document.getElementById("activeStatementBadge");
-  badge.textContent = s.source_name || "Tuotu tiliote";
+  const badge = document.getElementById("activeProfileBadge");
+  badge.textContent = s.display_name || p.display_name || s.role_label;
   badge.classList.remove("hidden");
 
   document.getElementById("classicHero").classList.toggle("hidden", suuntaEnabled);
@@ -71,6 +105,8 @@ function renderSnapshot(s) {
 
   document.getElementById("suuntaHero").classList.toggle("hidden", !suuntaEnabled);
   document.getElementById("suuntaQuickActions").classList.toggle("hidden", !suuntaEnabled);
+  document.getElementById("homeSuuntaChatCard").classList.toggle("hidden", !suuntaEnabled);
+
   document.getElementById("dot1").classList.toggle("active", !suuntaEnabled);
   document.getElementById("dot2").classList.toggle("active", suuntaEnabled);
 
@@ -89,7 +125,7 @@ function renderSnapshot(s) {
   const firstTx = (s.recent_transactions || [])[0];
   document.getElementById("homeReceiptCard").innerHTML = firstTx
     ? renderReceiptRow(firstTx)
-    : `<div class="item-sub">Ei vielä tapahtumia</div>`;
+    : `<div class="item-sub">Ei tapahtumia</div>`;
 
   const allReceiptsHtml = (s.recent_transactions || []).map(renderReceiptRow).join('<div class="divider"></div>');
   document.getElementById("allReceiptsCard").innerHTML = allReceiptsHtml;
@@ -108,14 +144,14 @@ function renderSnapshot(s) {
 
   const cats = Object.entries(s.everyday_categories_30d || {});
   document.getElementById("categoriesCard").innerHTML = cats.length
-    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${k}</span><strong class="nowrap">${fmtEur(v)}</strong></div>`).join("")
+    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${escapeHtml(k)}</span><strong class="nowrap">${fmtEur(v)}</strong></div>`).join("")
     : `<div class="item-sub">Ei arjen tapahtumia</div>`;
 
   document.getElementById("meProfileCard").innerHTML = `
-    <div class="item-title">${s.source_name || "Tuotu tiliote"}</div>
-    <div class="item-sub">${s.transaction_count} tapahtumaa · Kuukausitulot ${fmtEur(s.monthly_income_eur)}</div>
+    <div class="item-title">${escapeHtml(s.display_name || s.role_label)} (${escapeHtml(s.role_label)})</div>
+    <div class="item-sub">${escapeHtml(p.customer_age)} v · ${escapeHtml(p.customer_postal_code)} · ${s.transaction_count} tapahtumaa · Tulot (30 pv) ${fmtEur(s.monthly_income_eur)}</div>
     <div class="divider"></div>
-    <div class="item-sub">Tärkeät asiat: ${(p.priorities || []).join(", ")}</div>
+    <div class="item-sub">Tärkeät asiat: ${escapeHtml((p.priorities || []).join(", "))}</div>
   `;
   document.getElementById("meToggleSuuntaBtn").textContent = suuntaEnabled ? "Poista käytöstä" : "Aktivoi";
 }
@@ -128,25 +164,33 @@ function renderReceiptRow(tx) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l3-2 3 2 2-2 2 2 3-2 3 2V2H4z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>
         </span>
         <div>
-          <div class="item-title">${tx.merchant}</div>
-          <div class="item-sub">${tx.date}</div>
+          <div class="item-title">${escapeHtml(tx.merchant)}</div>
+          <div class="item-sub">${escapeHtml(tx.date)}</div>
         </div>
       </div>
-      <strong class="nowrap" style="color:${tx.amount_eur > 0 ? "#007429" : "#18241d"}">${fmtEur(tx.amount_eur)}</strong>
+      <strong class="nowrap" style="color:${tx.amount_eur > 0 ? "#007a33" : "#18241d"}">${fmtEur(tx.amount_eur)}</strong>
     </div>`;
 }
 
-function openActivatePrompt() {
-  document.getElementById("activateSuuntaModal").classList.remove("hidden");
+// Suora käyttöönotto ilman pop-up-ikkunaa
+async function enableSuuntaDirect() {
+  if (!currentCustomerId) return;
+  await fetch(`/api/toggle-suunta/${encodeURIComponent(currentCustomerId)}?enabled=true`, { method: "POST" });
+  await loadState();
 }
 
-function declineSuuntaActivation() {
-  document.getElementById("activateSuuntaModal").classList.add("hidden");
+async function toggleSuuntaMode() {
+  if (!currentCustomerId) return;
+  const nextState = !Boolean(currentSnapshot?.profile?.suunta_enabled);
+  await fetch(`/api/toggle-suunta/${encodeURIComponent(currentCustomerId)}?enabled=${nextState}`, { method: "POST" });
+  await loadState();
 }
 
-function proceedToOnboarding() {
-  document.getElementById("activateSuuntaModal").classList.add("hidden");
-  openOnboarding();
+async function openHomeOrFullChat() {
+  if (!currentSnapshot?.profile?.suunta_enabled) {
+    await enableSuuntaDirect();
+  }
+  switchTab("chat");
 }
 
 function openOnboarding() {
@@ -167,7 +211,7 @@ async function saveOnboarding() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      statement_id: currentStatementId,
+      statement_id: currentCustomerId,
       suunta_enabled: true,
       priorities,
       savings_goal_monthly_eur: savings,
@@ -178,103 +222,105 @@ async function saveOnboarding() {
   switchTab("home");
 }
 
-async function toggleSuuntaMode() {
-  const nextState = !Boolean(currentSnapshot?.profile?.suunta_enabled);
-  if (nextState) {
-    openActivatePrompt();
-    return;
+// Piirtää keskusteluhistorian sekä etusivun chattiin että koko ruudun chattiin
+function renderHistory(history, showLoading = false) {
+  const containers = [
+    document.getElementById("chatMessages"),
+    document.getElementById("homeChatMessages"),
+  ];
+
+  const greeting = `<div class="msg assistant">Moikka! Olen Suunta, talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>`;
+
+  const messagesHtml = history.length
+    ? history
+        .map((m) => {
+          const cardsHtml = (m.action_cards || [])
+            .map((c) => {
+              const encoded = encodeURIComponent(JSON.stringify(c));
+              return `
+                <div class="action-card">
+                  <h4>${escapeHtml(c.title)}</h4>
+                  <p>${escapeHtml(c.summary)}</p>
+                  <button class="apply-btn" onclick="applyPlanEncoded('${encoded}')">Hyväksy suunnitelma</button>
+                </div>`;
+            })
+            .join("");
+          return `<div class="msg ${m.role}">${formatMessageText(m.content)}${cardsHtml}</div>`;
+        })
+        .join("")
+    : greeting;
+
+  const loadingHtml = showLoading
+    ? `<div class="typing-bubble" role="status" aria-live="polite">
+         <span class="spinner-ring"></span>
+         <span>Suunta miettii ja laskee</span>
+         <span class="typing-dots"><span></span><span></span><span></span></span>
+       </div>`
+    : "";
+
+  for (const el of containers) {
+    if (!el) continue;
+    el.innerHTML = messagesHtml + loadingHtml;
+    el.scrollTop = el.scrollHeight;
   }
-  await fetch(`/api/toggle-suunta/${currentStatementId}?enabled=false`, { method: "POST" });
-  await loadState();
 }
 
-function handleChatIconClick() {
-  if (!currentSnapshot?.profile?.suunta_enabled) {
-    openActivatePrompt();
-  } else {
-    switchTab("chat");
-  }
-}
-
-function renderHistory(history) {
-  const el = document.getElementById("chatMessages");
-  if (!history.length) {
-    el.innerHTML = `<div class="msg assistant">Moikka! Olen Suunta, henkilökohtainen talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>`;
-    return;
-  }
-  el.innerHTML = history
-    .map((m) => {
-      const cardsHtml = (m.action_cards || [])
-        .map(
-          (c) => `
-          <div class="action-card">
-            <h4>${c.title}</h4>
-            <p>${c.summary}</p>
-            <button class="apply-btn" onclick='applyPlan(${JSON.stringify(c)})'>Hyväksy suunnitelma</button>
-          </div>`
-        )
-        .join("");
-      return `<div class="msg ${m.role}">${m.content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}${cardsHtml}</div>`;
-    })
-    .join("");
-  el.scrollTop = el.scrollHeight;
+function setSendingState(loading) {
+  isSending = loading;
+  ["homeChatSubmit", "chatSubmit"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.disabled = loading;
+      btn.textContent = loading ? "..." : "Lähetä";
+    }
+  });
 }
 
 async function sendMessage(text) {
-  if (!text.trim()) return;
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ statement_id: currentStatementId, message: text }),
-  });
-  const data = await res.json();
-  renderSnapshot(data.updated_state);
-  await loadState();
+  const cleanText = String(text || "").trim();
+  if (!cleanText || isSending || !currentCustomerId) return;
+
+  // Näytetään käyttäjän viesti ja latausindikaattori heti
+  const optimisticHistory = [
+    ...currentHistory,
+    { role: "user", content: cleanText, action_cards: [] },
+  ];
+  renderHistory(optimisticHistory, true);
+  setSendingState(true);
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ statement_id: currentCustomerId, message: cleanText }),
+    });
+    if (!res.ok) throw new Error("Palvelinvirhe vastauksessa");
+    const data = await res.json();
+    renderSnapshot(data.updated_state);
+    await loadState();
+  } catch (err) {
+    renderHistory([
+      ...optimisticHistory,
+      { role: "assistant", content: `Yhteysvirhe: ${err.message}`, action_cards: [] },
+    ]);
+  } finally {
+    setSendingState(false);
+  }
 }
 
-async function applyPlan(card) {
+async function applyPlanEncoded(encoded) {
+  const card = JSON.parse(decodeURIComponent(encoded));
   const res = await fetch("/api/apply-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ statement_id: currentStatementId, ...card }),
+    body: JSON.stringify({ statement_id: currentCustomerId, ...card }),
   });
   const data = await res.json();
-  renderSnapshot(data.snapshot);
-  renderHistory(data.history);
+  currentSnapshot = data.snapshot;
+  currentHistory = data.history || [];
+  renderSnapshot(currentSnapshot);
+  renderHistory(currentHistory);
   switchTab("home");
-}
-
-async function uploadStatementFile(file, statusEl) {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(`/api/upload-statement/${currentStatementId}`, { method: "POST", body: formData });
-  if (!res.ok) {
-    const err = await res.json();
-    statusEl.textContent = `Virhe: ${err.detail}`;
-    return false;
-  }
-  statusEl.textContent = "Tiliote ladattu!";
-  return true;
-}
-
-async function uploadStatementFromMe() {
-  const input = document.getElementById("meStatementInput");
-  const statusEl = document.getElementById("meUploadStatus");
-  if (!input.files.length) {
-    statusEl.textContent = "Valitse ensin .xlsx- tai .csv-tiedosto.";
-    return;
-  }
-  statusEl.textContent = "Ladataan...";
-  const ok = await uploadStatementFile(input.files[0], statusEl);
-  if (ok) {
-    await loadState();
-    switchTab("home");
-  }
-}
-
-async function resetDemoSession() {
-  await fetch(`/api/reset/${currentStatementId}`, { method: "POST" });
-  openStatementGate();
 }
 
 function switchTab(tabName) {
@@ -292,15 +338,22 @@ function toggleCardDetails() {
   if (currentSnapshot) renderSnapshot(currentSnapshot);
 }
 
-function askPreset(text) {
-  switchTab("chat");
+function askPreset(text, stayOnHome = false) {
+  if (!stayOnHome) switchTab("chat");
   sendMessage(text);
 }
-function sendQuickChat(text) { sendMessage(text); }
 
 document.getElementById("chatForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = document.getElementById("chatInput");
+  const text = input.value;
+  input.value = "";
+  sendMessage(text);
+});
+
+document.getElementById("homeChatForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("homeChatInput");
   const text = input.value;
   input.value = "";
   sendMessage(text);

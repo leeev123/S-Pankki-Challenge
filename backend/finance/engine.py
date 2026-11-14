@@ -3,76 +3,132 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-import os
 import pandas as pd
 
 from app.database import get_profile
-from finance.excel_loader import parse_statement_file
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 SAMPLE_TX_PATH = DATA_DIR / "sample_transactions.csv"
+SAMPLE_CUST_PATH = DATA_DIR / "sample_customers.csv"
 
 MANDATORY_REGULAR_KEYS = {
     "rent", "vuokra", "housing", "asuminen", "utilities", "sähkö",
-    "telecom", "puhelin", "internet", "insurance", "vakuutus", "loan", "laina", "subscription"
+    "telecom", "puhelin", "internet", "insurance", "vakuutus",
+    "loan", "laina", "subscription", "subscriptions",
 }
 MANDATORY_IRREGULAR_KEYS = {
     "health", "terveys", "pharmacy", "apteekki", "repair", "huolto",
-    "appliances", "kodinkone", "auto", "car_service", "dentist", "lääkäri"
+    "appliances", "kodinkone", "auto", "car_service", "dentist", "lääkäri",
+    "taxes", "vero",
 }
+INVESTMENT_KEYS = {"investments", "investment", "sijoitus", "sijoitukset"}
 
 
-def find_uploaded_statement_path(statement_id: str) -> Path | None:
-    """Etsii käyttäjän lataaman tiliotetiedoston (.xlsx, .xls tai .csv)."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for ext in (".xlsx", ".xls", ".csv"):
-        candidate = DATA_DIR / f"uploaded_{statement_id}{ext}"
-        if candidate.exists():
-            return candidate
-    return None
+def _ensure_data_files() -> None:
+    if not SAMPLE_CUST_PATH.exists():
+        raise FileNotFoundError(f"Tiedosto puuttuu: {SAMPLE_CUST_PATH}")
+    if not SAMPLE_TX_PATH.exists():
+        raise FileNotFoundError(f"Tiedosto puuttuu: {SAMPLE_TX_PATH}")
+
+
+@lru_cache(maxsize=1)
+def _load_all_transactions() -> pd.DataFrame:
+    """Lukee sample_transactions.csv:n kerran (1. rivi otsikko, loput dataa)."""
+    _ensure_data_files()
+    df = pd.read_csv(SAMPLE_TX_PATH)
+    df.columns = [str(c).strip() for c in df.columns]
+    df["customer_id"] = df["customer_id"].astype(str).str.strip()
+    df["tx_date"] = pd.to_datetime(df["tx_date"], errors="coerce")
+    if "tx_timestamp" in df.columns:
+        df["tx_timestamp_dt"] = pd.to_datetime(df["tx_timestamp"], errors="coerce")
+    else:
+        df["tx_timestamp_dt"] = df["tx_date"]
+    df["tx_amount_eur"] = pd.to_numeric(df["tx_amount_eur"], errors="coerce").fillna(0.0)
+    df["balance_after_eur"] = pd.to_numeric(df["balance_after_eur"], errors="coerce").fillna(0.0)
+    df["category"] = df["category"].astype(str).str.strip()
+    df["merchant_id"] = df["merchant_id"].astype(str).str.strip()
+    return df
+
+
+def _derive_role_from_transactions(cust_df: pd.DataFrame) -> str:
+    """Päättelee roolin suoraan datakansion tulokategoriasta keksimättä uutta dataa."""
+    income_cats = {
+        str(c).strip().lower()
+        for c in cust_df[cust_df["tx_amount_eur"] > 0]["category"].tolist()
+    }
+    if "pension" in income_cats:
+        return "Eläkeläinen"
+    if "salary" in income_cats and "benefits" not in income_cats:
+        return "Työssäkäyvä"
+    if "benefits" in income_cats:
+        return "Opiskelija"
+    return "Asiakas"
+
+
+@lru_cache(maxsize=4)
+def list_customers() -> list[dict[str, Any]]:
+    """Palauttaa sample_customers.csv:n kolme asiakasta ja oikeat faktat sample_transactions.csv:stä."""
+    _ensure_data_files()
+    cdf = pd.read_csv(SAMPLE_CUST_PATH, dtype=str)
+    cdf.columns = [str(c).strip() for c in cdf.columns]
+    for col in cdf.columns:
+        cdf[col] = cdf[col].fillna("").astype(str).str.strip()
+
+    all_tx = _load_all_transactions()
+    customers: list[dict[str, Any]] = []
+
+    for row in cdf.to_dict(orient="records"):
+        cid = str(row.get("customer_id", "")).strip()
+        if not cid:
+            continue
+        csv_name = str(row.get("customer name") or row.get("customer_name") or cid).strip()
+        age = str(row.get("customer_age", "")).strip()
+        postal = str(row.get("customer_postal_code", "")).strip()
+
+        cust_tx = all_tx[all_tx["customer_id"] == cid].sort_values(
+            ["tx_date", "tx_timestamp_dt"], ascending=[False, False]
+        )
+        balance = float(cust_tx["balance_after_eur"].iloc[0]) if not cust_tx.empty else 0.0
+        role_label = _derive_role_from_transactions(cust_tx) if not cust_tx.empty else csv_name
+
+        customers.append({
+            "customer_id": cid,
+            "display_name": csv_name,
+            "role_label": role_label,
+            "customer_age": age,
+            "customer_postal_code": postal,
+            "account_balance_eur": round(balance, 2),
+        })
+    return customers
+
+
+def get_customer_info(customer_id: str) -> dict[str, Any]:
+    target = str(customer_id).strip()
+    for cust in list_customers():
+        if cust["customer_id"] == target:
+            return cust
+    raise ValueError(f"Asiakasta '{target}' ei löytynyt tiedostosta sample_customers.csv")
 
 
 @lru_cache(maxsize=16)
-def load_statement_transactions(statement_id: str = "DEMO_TILIOTE") -> tuple[pd.DataFrame, str, bool]:
-    """
-    Hakee tiliotetapahtumat tietokannasta:
-    1) Jos käyttäjä on ladannut oman tiedoston (uploaded_<statement_id>.xlsx/.csv), luetaan se.
-    2) Muutoin luetaan oletustietokanta sample_transactions.csv:stä.
-    Palauttaa: (DataFrame, lähteen_nimi, onko_käyttäjän_lataama_tiedosto)
-    """
-    uploaded_path = find_uploaded_statement_path(statement_id)
-    if uploaded_path is not None:
-        df = parse_statement_file(uploaded_path, statement_id=statement_id)
-        return df, uploaded_path.name, True
-
-    tx_env = Path(os.getenv("SBANK_TX_CSV", str(SAMPLE_TX_PATH)))
-    if not tx_env.is_absolute():
-        tx_env = Path(__file__).resolve().parents[1] / tx_env
-    tx_path = tx_env if tx_env.exists() else SAMPLE_TX_PATH
-
-    if not tx_path.exists():
-        raise FileNotFoundError(f"Tietokantatiedostoa ei löytynyt polusta {tx_path}")
-
-    df = parse_statement_file(tx_path, statement_id=statement_id)
-
-    # Jos sample_transactions.csv sisältää useamman customer_id:n, otetaan ensimmäinen yhtenäinen tiliote
-    raw = pd.read_csv(tx_path)
-    if "customer_id" in raw.columns and not raw.empty:
-        first_cid = str(raw["customer_id"].iloc[0])
-        filtered_raw = raw[raw["customer_id"].astype(str) == first_cid].copy()
-        filtered_raw["tx_date"] = pd.to_datetime(filtered_raw["tx_date"], errors="coerce").fillna(pd.Timestamp.today())
-        filtered_raw["tx_amount_eur"] = pd.to_numeric(filtered_raw["tx_amount_eur"], errors="coerce").fillna(0.0)
-        filtered_raw["balance_after_eur"] = pd.to_numeric(filtered_raw["balance_after_eur"], errors="coerce").fillna(0.0)
-        filtered_raw = filtered_raw.sort_values("tx_date", ascending=False)
-        return filtered_raw, tx_path.name, False
-
-    return df, tx_path.name, False
+def load_statement_transactions(statement_id: str = "CUST_STUDENT_01") -> tuple[pd.DataFrame, str, bool]:
+    """Lukee vain yhden valitun customer_id:n tapahtumat sample_transactions.csv:stä."""
+    target = str(statement_id).strip()
+    get_customer_info(target)
+    all_tx = _load_all_transactions()
+    df = all_tx[all_tx["customer_id"] == target].copy()
+    if df.empty:
+        raise ValueError(f"Asiakkaalle '{target}' ei löytynyt tapahtumia sample_transactions.csv:stä")
+    df = df.sort_values(["tx_date", "tx_timestamp_dt"], ascending=[False, False]).reset_index(drop=True)
+    return df, SAMPLE_TX_PATH.name, False
 
 
 def classify_basket(category: str, amount: float) -> str:
     if amount > 0:
         return "income"
     cat = str(category).strip().lower()
+    if any(k in cat for k in INVESTMENT_KEYS):
+        return "investments"
     if any(k in cat for k in MANDATORY_REGULAR_KEYS):
         return "mandatory_regular"
     if any(k in cat for k in MANDATORY_IRREGULAR_KEYS):
@@ -80,11 +136,19 @@ def classify_basket(category: str, amount: float) -> str:
     return "everyday_discretionary"
 
 
-def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]:
-    """Laskee kolmen korin yhteenvedon, viikkokäyttövaran ja tuoreimmat tapahtumat."""
-    df, source_name, has_uploaded = load_statement_transactions(statement_id)
+def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
+    """Laskee kolmen korin yhteenvedon, viikkokäyttövaran ja tuoreimmat tapahtumat yhdelle ID:lle."""
+    target = str(statement_id).strip()
+    cust_info = get_customer_info(target)
+    df, source_name, _ = load_statement_transactions(target)
     df = df.copy()
-    profile = get_profile(statement_id)
+
+    profile = dict(get_profile(target))
+    profile["statement_id"] = target
+    profile["display_name"] = cust_info["display_name"]
+    profile["role_label"] = cust_info["role_label"]
+    profile["customer_age"] = cust_info["customer_age"]
+    profile["customer_postal_code"] = cust_info["customer_postal_code"]
 
     df["basket"] = [
         classify_basket(cat, amt) for cat, amt in zip(df["category"], df["tx_amount_eur"])
@@ -95,10 +159,6 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     last_7 = df[df["tx_date"] >= (max_date - pd.Timedelta(days=7))]
 
     monthly_income = float(last_30[last_30["tx_amount_eur"] > 0]["tx_amount_eur"].sum())
-    if monthly_income <= 0:
-        all_income = float(df[df["tx_amount_eur"] > 0]["tx_amount_eur"].sum())
-        monthly_income = all_income if all_income > 0 else 2500.0
-
     mandatory_regular = abs(float(last_30[last_30["basket"] == "mandatory_regular"]["tx_amount_eur"].sum()))
     mandatory_irregular = abs(float(last_30[last_30["basket"] == "mandatory_irregular"]["tx_amount_eur"].sum()))
     everyday_30d = abs(float(last_30[last_30["basket"] == "everyday_discretionary"]["tx_amount_eur"].sum()))
@@ -116,7 +176,7 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     weekly_safe_to_spend = round(weekly_budget - spent_this_week, 2)
     daily_safe_to_spend = round(max(0.0, weekly_safe_to_spend) / 4.0, 2)
 
-    account_balance = float(df["balance_after_eur"].iloc[0]) if "balance_after_eur" in df.columns else 853.34
+    account_balance = float(df["balance_after_eur"].iloc[0])
 
     everyday_df = last_30[last_30["basket"] == "everyday_discretionary"]
     by_category = (
@@ -131,9 +191,7 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     recent_receipts = []
     for _, row in df.head(10).iterrows():
         tx_d = row["tx_date"]
-        date_label = "Viimeisin päivä" if pd.notna(tx_d) and tx_d.date() == max_date.date() else (
-            tx_d.strftime("%d.%m.%Y") if pd.notna(tx_d) else ""
-        )
+        date_label = tx_d.strftime("%d.%m.%Y") if pd.notna(tx_d) else ""
         recent_receipts.append({
             "date": date_label,
             "merchant": str(row.get("merchant_id", row.get("category", "Ostos"))),
@@ -142,12 +200,12 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
             "basket": row["basket"],
         })
 
-    display_file = profile.get("file_name") or source_name
-
     return {
-        "statement_id": statement_id,
-        "has_uploaded_statement": has_uploaded,
-        "source_name": display_file,
+        "statement_id": target,
+        "display_name": cust_info["display_name"],
+        "role_label": cust_info["role_label"],
+        "source_name": cust_info["display_name"],
+        "data_file": source_name,
         "transaction_count": int(len(df)),
         "account_balance_eur": round(account_balance, 2),
         "monthly_income_eur": round(monthly_income, 2),
@@ -169,11 +227,12 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     }
 
 
-def build_agent_statement_context(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]:
-    """Kokoaa pääkoodia varten tiiviin tiliotepaketin tietokannasta tekoälyagentille annettavaksi."""
+def build_agent_statement_context(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
     snap = get_financial_snapshot(statement_id)
     return {
-        "source_file": snap["source_name"],
+        "customer_id": snap["statement_id"],
+        "display_name": snap["display_name"],
+        "role_label": snap["role_label"],
         "transaction_count": snap["transaction_count"],
         "account_balance_eur": snap["account_balance_eur"],
         "monthly_income_eur": snap["monthly_income_eur"],
