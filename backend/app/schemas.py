@@ -3,24 +3,23 @@ from pydantic import BaseModel, Field
 
 
 class OnboardingRequest(BaseModel):
-    """Käyttöönotossa lähetettävät käyttäjän arvot, leikkauskohteet ja Suunnan aktivointitila."""
     statement_id: str = "DEMO_TILIOTE"
     suunta_enabled: bool = True
     monthly_income_eur: float | None = None
-    priorities: list[str] = Field(default_factory=lambda: ["Laadukas arkiruoka", "Säästäminen"])
-    cut_from: list[str] = Field(default_factory=lambda: ["Kahvilat", "Noutoruoka"])
-    savings_goal_name: str = "Puskuri & Tavoite"
-    savings_goal_monthly_eur: float = 200.0
+    mandatory_regular_eur: float | None = None
+    everyday_monthly_eur: float | None = None
+    priorities: list[str] = Field(default_factory=lambda: ["Ruokakauppa"])
+    cut_from: list[str] = Field(default_factory=list)
+    savings_goal_name: str = "Säästää tavoitteeseen"
+    savings_goal_monthly_eur: float = 100.0
 
 
 class ChatRequest(BaseModel):
-    """Käyttäjän chat-viesti pääkoodille."""
     statement_id: str = "DEMO_TILIOTE"
     message: str
 
 
 class ApplyPlanRequest(BaseModel):
-    """Kun käyttäjä hyväksyy Suunnan ehdottaman budjettivaihtoehdon."""
     statement_id: str = "DEMO_TILIOTE"
     plan_id: str
     title: str
@@ -32,7 +31,6 @@ class ApplyPlanRequest(BaseModel):
 
 
 class AgentActionCard(BaseModel):
-    """Chat-kuplan sisällä näytettävä toimintokortti ('Hyväksy suunnitelma')."""
     plan_id: str
     title: str
     summary: str
@@ -46,7 +44,6 @@ class AgentActionCard(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """API:n vastaus chat-viestiin."""
     reply: str
     action_cards: list[AgentActionCard] = Field(default_factory=list)
     updated_state: dict[str, Any]

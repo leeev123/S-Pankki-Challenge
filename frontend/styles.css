@@ -16,30 +16,14 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .hidden { display: none !important; }
 .nowrap { white-space: nowrap; }
 
-.phone-shell {
-  width: 100%; max-width: 416px; height: min(868px, calc(100dvh - 24px)); background: #fff;
-  border-radius: 30px; display: flex; flex-direction: column; position: relative;
-  box-shadow: 0 20px 50px rgba(10, 32, 20, 0.16), 0 0 0 1px rgba(0, 40, 20, 0.06); overflow: hidden;
-}
-@media (max-width: 520px) {
-  body { background: #fff; align-items: stretch; }
-  .phone-shell { max-width: 100%; height: 100dvh; border-radius: 0; box-shadow: none; }
-}
+.phone-shell { width: 100%; max-width: 416px; height: min(868px, calc(100dvh - 24px)); background: #fff; border-radius: 30px; display: flex; flex-direction: column; position: relative; box-shadow: 0 20px 50px rgba(10, 32, 20, 0.16), 0 0 0 1px rgba(0, 40, 20, 0.06); overflow: hidden; }
+@media (max-width: 520px) { body { background: #fff; align-items: stretch; } .phone-shell { max-width: 100%; height: 100dvh; border-radius: 0; box-shadow: none; } }
 
-/* Käyttövara-osion ja Bonuksen sulava animaatio */
-.anim-collapse {
-  display: grid; grid-template-rows: 0fr; opacity: 0;
-  transition: grid-template-rows 0.54s var(--ease-spring), opacity 0.38s ease;
-}
+.anim-collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.54s var(--ease-spring), opacity 0.38s ease; }
 .anim-collapse.open { grid-template-rows: 1fr; opacity: 1; }
 .anim-collapse-inner { overflow: hidden; min-height: 0; }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- 1. Profiilin valinta --- */
 .gate-screen { flex: 1; background: linear-gradient(180deg, #fff 0%, var(--s-mint) 100%); padding: 40px 20px 28px; display: flex; flex-direction: column; overflow-y: auto; }
 .gate-header { text-align: center; margin-bottom: 26px; }
 .gate-logo { width: 56px; height: 56px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(0, 80, 40, 0.08); }
@@ -58,54 +42,54 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .chevron { width: 18px; height: 18px; color: var(--s-muted); flex-shrink: 0; }
 .gate-status { text-align: center; font-size: 13px; color: var(--s-muted); margin-top: 12px; }
 
-/* --- 2. KOKO RUUDUN KÄYTTÖÖNOTTONÄKYMÄ (Vakaa, ei heilu!) --- */
-.onboarding-screen {
-  position: absolute; inset: 0; z-index: 45; background: #ffffff;
-  display: flex; flex-direction: column;
-}
-.ob-topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 10px; background: #fff;
-}
+/* Koko ruudun käyttöönotto */
+.onboarding-screen { position: absolute; inset: 0; z-index: 45; background: #fff; display: flex; flex-direction: column; }
+.ob-topbar { display: flex; align-items: center; justify-content: space-between; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 10px; background: #fff; }
 .ob-step-indicator { font-size: 12.5px; font-weight: 600; color: var(--s-muted); }
 .ob-progress-track { height: 4px; background: #edf3ef; width: 100%; }
 .ob-progress-fill { height: 100%; background: var(--s-green); transition: width 0.25s ease; }
 
-.ob-body { flex: 1; overflow-y: auto; padding: 22px 20px 16px; }
-.ob-title { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--s-text); }
-.ob-subtitle { font-size: 13.5px; color: var(--s-muted); line-height: 1.45; margin: 0 0 18px; }
+.ob-body { flex: 1; overflow-y: auto; padding: 20px 20px 16px; }
+.ob-title { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 5px; }
+.ob-subtitle { font-size: 13.5px; color: var(--s-muted); line-height: 1.45; margin: 0 0 15px; }
 
-.ob-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 18px; }
-.ob-sum-tile { background: var(--s-mint-soft); border: 1px solid var(--s-border); border-radius: 13px; padding: 12px 8px; text-align: center; }
-.ob-sum-tile span { display: block; font-size: 11.5px; color: var(--s-muted); margin-bottom: 4px; }
-.ob-sum-tile strong { font-size: 15.5px; font-weight: 700; color: var(--s-text); }
+/* Vaihe 1: Selkeät Tulot vs. Menot (kiinteät + arki samassa laatikossa) */
+.io-summary-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 10px; margin-bottom: 10px; }
+.io-box { border-radius: 14px; padding: 13px; border: 1px solid var(--s-border); display: flex; flex-direction: column; justify-content: space-between; }
+.io-box.income { background: var(--s-mint-soft); border-color: #c7dfd0; }
+.io-box.expenses { background: #fafafa; border-color: #e2e6e4; }
+.io-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--s-muted); margin-bottom: 4px; }
+.io-box.income .io-tag { color: var(--s-green-dark); }
+.io-total { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.io-box.income .io-total { color: var(--s-green); }
+.io-sub-split { margin-top: 8px; padding-top: 7px; border-top: 1px solid #e6ece8; font-size: 11.5px; color: var(--s-muted); display: flex; flex-direction: column; gap: 2px; }
+.io-sub-row { display: flex; justify-content: space-between; }
 
-.ob-cat-list { background: #fff; border: 1px solid var(--s-border); border-radius: 14px; padding: 12px 14px; }
-.ob-cat-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13.5px; }
+.edit-io-toggle { border: none; background: transparent; color: var(--s-green); font-size: 12.5px; font-weight: 600; padding: 2px 0 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.edit-io-panel { background: var(--s-mint-soft); border: 1px solid var(--s-border); border-radius: 13px; padding: 11px 12px; margin-bottom: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.edit-io-field label { display: block; font-size: 11px; font-weight: 600; color: var(--s-muted); margin-bottom: 4px; }
+.edit-io-field input { width: 100%; padding: 7px 8px; border: 1px solid #cbd9cf; border-radius: 8px; font-size: 13.5px; font-weight: 600; background: #fff; outline: none; }
+.edit-io-field input:focus { border-color: var(--s-green); }
+
+.ob-cat-list { background: #fff; border: 1px solid var(--s-border); border-radius: 13px; padding: 9px 13px; margin-bottom: 4px; }
+.ob-cat-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
 .ob-cat-row + .ob-cat-row { border-top: 1px solid #eef3ef; }
 
-.ob-section-label { font-size: 13px; font-weight: 600; color: var(--s-text); margin: 16px 0 8px; }
+.ob-section-label { font-size: 13px; font-weight: 600; color: var(--s-text); margin: 14px 0 7px; }
 .ob-radio-list { display: flex; flex-direction: column; gap: 8px; }
-.ob-radio-btn {
-  display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left;
-  background: #fff; border: 1.5px solid var(--s-border); border-radius: 12px; padding: 12px 14px;
-  font-size: 14px; font-weight: 500; color: var(--s-text); cursor: pointer;
-}
+.ob-radio-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; background: #fff; border: 1.5px solid var(--s-border); border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 500; color: var(--s-text); cursor: pointer; }
 .ob-radio-btn.selected { border-color: var(--s-green); background: var(--s-mint-soft); font-weight: 600; color: var(--s-green-dark); }
-.ob-radio-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #b8c7be; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ob-radio-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #b8c7be; display: inline-flex; flex-shrink: 0; }
 .ob-radio-btn.selected .ob-radio-dot { border-color: var(--s-green); background: var(--s-green); box-shadow: inset 0 0 0 3px #fff; }
 
 .pill-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.choice-pill {
-  border: 1.5px solid #cfe0d4; background: #fff; color: var(--s-text);
-  border-radius: 999px; padding: 8px 13px; font-size: 13px; font-weight: 500; cursor: pointer;
-}
+.choice-pill { border: 1.5px solid #cfe0d4; background: #fff; color: var(--s-text); border-radius: 999px; padding: 8px 13px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .choice-pill.selected { background: var(--s-green); border-color: var(--s-green); color: #fff; font-weight: 600; }
 
 .ob-footer { padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #edf2ee; background: #fff; }
 .ob-main-btn { padding: 13px 16px !important; font-size: 15px !important; border-radius: 12px !important; }
 
-/* --- 3. S-mobiili runko & Bonus --- */
+/* S-mobiili runko */
 .app-shell { display: flex; flex-direction: column; height: 100%; }
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 4px; background: #fff; flex-shrink: 0; }
 .icon-btn { border: none; background: transparent; color: #1c241f; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -118,7 +102,7 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 
 .hero-section { background: #fff; text-align: center; padding: 4px 16px 10px; border-bottom: 1px solid #eff3f0; }
 .hero-section.compact-mode { padding: 2px 16px 8px; }
-.bonus-top-title { color: var(--s-green); font-size: 19px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 4px; }
+.bonus-top-title { color: var(--s-green); font-size: 19px; font-weight: 700; margin-bottom: 4px; }
 .bonus-sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--s-green); margin-bottom: 14px; }
 .info-circle { width: 15px; height: 15px; border-radius: 50%; background: var(--s-green); color: #fff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 
@@ -135,7 +119,7 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .house-bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .house-content { position: relative; z-index: 1; color: #fff; padding-top: 14px; text-align: center; }
 .house-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.house-amount { font-size: 33px; font-weight: 700; letter-spacing: -0.02em; }
+.house-amount { font-size: 33px; font-weight: 700; }
 .hero-link { border: none; background: transparent; color: var(--s-green); font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 4px 0 6px; }
 .hero-link svg { width: 17px; height: 17px; }
 
@@ -144,41 +128,26 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .mini-house-badge { position: relative; width: 66px; height: 42px; color: var(--s-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .mini-house-badge span { position: relative; z-index: 1; color: #fff; font-size: 13px; font-weight: 700; padding-top: 5px; }
 .compact-bonus-texts { display: flex; flex-direction: column; }
-.compact-bonus-texts strong { font-size: 13.5px; color: var(--s-text); font-weight: 600; }
+.compact-bonus-texts strong { font-size: 13.5px; font-weight: 600; }
 .compact-bonus-texts span { font-size: 11.5px; color: var(--s-muted); }
 .compact-bonus-right { text-align: right; display: flex; flex-direction: column; }
 .compact-bonus-right span { font-size: 11px; color: var(--s-muted); }
 .compact-bonus-right strong { font-size: 13.5px; color: var(--s-green); font-weight: 700; }
 
-/* SUURENNETTU Viikon jäljellä oleva käyttövara -osio */
 .allowance-drawer { background: var(--s-mint); padding: 0 14px; }
 .allowance-drawer.open { padding: 14px 14px 6px; }
-.allowance-banner {
-  background: linear-gradient(135deg, #007a3d 0%, #00592c 100%);
-  color: #fff; border-radius: 20px; padding: 20px 20px 18px;
-  box-shadow: 0 10px 26px rgba(0, 95, 46, 0.2);
-  transform: translateY(-10px) scale(0.97);
-  transition: transform 0.54s var(--ease-spring), background 0.35s ease;
-}
+.allowance-banner { background: linear-gradient(135deg, #007a3d 0%, #00592c 100%); color: #fff; border-radius: 20px; padding: 20px 20px 18px; box-shadow: 0 10px 26px rgba(0, 95, 46, 0.2); transform: translateY(-10px) scale(0.97); transition: transform 0.54s var(--ease-spring), background 0.35s ease; }
 .allowance-drawer.open .allowance-banner { transform: translateY(0) scale(1); }
-.allowance-banner.deficit {
-  background: linear-gradient(135deg, #9a3412 0%, #7c2d12 100%);
-  box-shadow: 0 10px 26px rgba(124, 45, 18, 0.22);
-}
+.allowance-banner.deficit { background: linear-gradient(135deg, #9a3412 0%, #7c2d12 100%); }
 .allowance-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .allowance-eyebrow { font-size: 13px; font-weight: 500; opacity: 0.92; margin-bottom: 5px; }
 .allowance-amount { font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
-.allowance-plan-btn {
-  border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.14); color: #fff;
-  border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 600;
-  display: inline-flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0;
-}
+.allowance-plan-btn { border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.14); color: #fff; border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; }
 .allowance-plan-btn svg { width: 14px; height: 14px; }
 .allowance-meter-track { height: 8px; background: rgba(255,255,255,0.22); border-radius: 999px; overflow: hidden; margin: 16px 0 9px; }
 .allowance-meter-fill { height: 100%; background: #fff; border-radius: 999px; transition: width 0.6s var(--ease-spring); }
 .allowance-meta { display: flex; justify-content: space-between; font-size: 12.5px; opacity: 0.95; font-weight: 500; }
 
-/* Minttupinta & Tiivis Suunta-kortti ilman tyhjää tilaa */
 .mint-surface { padding: 12px 14px 24px; }
 .quick-actions { display: flex; justify-content: space-around; margin-bottom: 18px; }
 .qa-item { border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--s-text); width: 98px; text-align: center; line-height: 1.25; }
@@ -187,7 +156,6 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 
 .card { background: var(--s-card); border-radius: 16px; padding: 15px; box-shadow: 0 2px 8px rgba(0, 28, 14, 0.04); margin-bottom: 14px; }
 .suunta-invite-box { border: 1px solid #cce0d2; padding: 16px; }
-
 .suunta-card { border: 1px solid #d4e4d9; padding: 14px; margin-bottom: 22px; }
 .suunta-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; min-width: 0; }
 .suunta-brand { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -203,34 +171,20 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .toggle-switch.on .toggle-thumb { transform: translateX(18px); }
 .btn-subtle { border: 1px solid var(--s-border); background: #fff; color: var(--s-green); font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 
-/* Toimintopainikkeet ("Muuta budjettia" & "Uusi hankinta") */
 .suunta-quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 11px; }
-.suunta-action-tile {
-  background: var(--s-mint-soft); border: 1px solid #d4e4d9; border-radius: 12px;
-  padding: 10px 11px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s;
-}
+.suunta-action-tile { background: var(--s-mint-soft); border: 1px solid #d4e4d9; border-radius: 12px; padding: 10px 11px; text-align: left; cursor: pointer; }
 .suunta-action-tile:hover { border-color: var(--s-green); background: #eaf4ec; }
 .suunta-action-tile strong { display: block; font-size: 13px; font-weight: 600; color: var(--s-green-dark); margin-bottom: 2px; }
 .suunta-action-tile span { display: block; font-size: 11.5px; color: var(--s-muted); }
 
-.quick-purchase-box {
-  display: flex; gap: 6px; margin-bottom: 11px; background: #f8fbf9;
-  border: 1px solid var(--s-border); border-radius: 12px; padding: 8px;
-}
-.quick-purchase-box input {
-  min-width: 0; border: 1px solid var(--s-border); border-radius: 8px; padding: 7px 9px; font-size: 13px; background: #fff; outline: none;
-}
+.quick-purchase-box { display: flex; gap: 6px; margin-bottom: 11px; background: #f8fbf9; border: 1px solid var(--s-border); border-radius: 12px; padding: 8px; }
+.quick-purchase-box input { min-width: 0; border: 1px solid var(--s-border); border-radius: 8px; padding: 7px 9px; font-size: 13px; background: #fff; outline: none; }
 #qpName { flex: 1.4; }
 #qpPrice { flex: 0.8; }
 
-/* Pienennetty, napakka chat-osuus */
-.home-chat-stream {
-  max-height: 180px; overflow-y: auto; display: flex; flex-direction: column;
-  gap: 9px; padding: 2px 2px 10px;
-}
-
+.home-chat-stream { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding: 2px 2px 10px; }
 .below-fold-section { padding-top: 6px; }
-.section-title { color: var(--s-green); font-size: 18.5px; font-weight: 700; letter-spacing: -0.015em; margin: 8px 0 10px; }
+.section-title { color: var(--s-green); font-size: 18.5px; font-weight: 700; margin: 8px 0 10px; }
 .section-header { margin-top: 4px; }
 .link-btn { border: none; background: transparent; color: var(--s-green); font-weight: 600; font-size: 15px; cursor: pointer; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -242,22 +196,31 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .s-visa-icon small { font-size: 5.5px; font-weight: 700; }
 .receipt-svg-icon { width: 22px; height: 24px; color: var(--s-green); flex-shrink: 0; }
 
-.item-title { font-weight: 500; font-size: 15px; color: var(--s-text); }
+.item-title { font-weight: 500; font-size: 15px; }
 .item-sub { font-size: 12.5px; color: var(--s-muted); margin-top: 2px; }
 .amount-green { color: var(--s-green); font-size: 18.5px; font-weight: 700; }
 .center-link { width: 100%; border: none; background: transparent; color: var(--s-green); font-weight: 600; font-size: 15px; cursor: pointer; padding: 2px 0; }
 
-/* Liukusäätimet */
 .slider-block { background: #fff; border: 1px solid #dce7df; border-radius: 13px; padding: 13px 14px; margin-bottom: 12px; }
 .slider-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .slider-head span { font-size: 13px; font-weight: 500; color: var(--s-muted); }
 .slider-head strong { font-size: 15px; font-weight: 700; color: var(--s-green); }
 .suunta-range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; background: #dce8df; border-radius: 999px; outline: none; margin: 6px 0; }
 .suunta-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--s-green); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 80, 40, 0.3); cursor: pointer; }
-.slider-live-note { font-size: 12.5px; color: var(--s-text); background: var(--s-mint); padding: 8px 11px; border-radius: 9px; margin-top: 6px; display: flex; justify-content: space-between; }
+.slider-live-note { font-size: 12.5px; background: var(--s-mint); padding: 8px 11px; border-radius: 9px; margin-top: 6px; display: flex; justify-content: space-between; }
 .deficit-warn-box { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 9px; padding: 8px 10px; font-size: 12px; line-height: 1.4; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
-/* Keskustelu & Toimintokortit */
+/* Säästövertailu S-Pankin mediaaniin (50 €) */
+.cmp-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 13px; }
+.cmp-badge { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--s-mint); color: var(--s-green-dark); }
+.cmp-badge.below { background: #f2f5f3; color: var(--s-muted); }
+.cmp-row { margin-bottom: 12px; }
+.cmp-row-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.cmp-track { height: 10px; background: #edf3ef; border-radius: 999px; overflow: hidden; }
+.cmp-fill-user { height: 100%; background: var(--s-green); border-radius: 999px; transition: width 0.5s var(--ease-spring); }
+.cmp-fill-median { height: 100%; background: #90a99b; border-radius: 999px; }
+.cmp-note { font-size: 12.5px; color: var(--s-muted); line-height: 1.45; margin-top: 10px; padding-top: 10px; border-top: 1px solid #edf2ee; }
+
 #tab-chat.active { display: flex; flex-direction: column; height: 100%; background: #f6f9f7; }
 .full-chat-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .suunta-full-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #e6eee8; }
@@ -298,7 +261,6 @@ body { margin: 0; background: #dde5df; display: flex; justify-content: center; a
 .suunta-composer input { flex: 1; min-width: 0; border: none; background: transparent; font-size: 13.5px; color: var(--s-text); outline: none; padding: 6px 0; }
 .composer-send-btn { border: none; background: var(--s-green); color: #fff; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 8px 14px; cursor: pointer; flex-shrink: 0; }
 
-/* Pankki-välilehti */
 .overview-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .stat-card { background: #fff; border-radius: 14px; padding: 13px 14px; box-shadow: 0 1px 4px rgba(0, 28, 14, 0.04); }
 .stat-card-label { font-size: 12px; color: var(--s-muted); margin-bottom: 4px; }

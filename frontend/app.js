@@ -7,10 +7,13 @@ let isSending = false;
 let wizardStep = 1;
 let wizardEntryStep = 1;
 let wizardState = {
+  incomeEur: 0,
+  fixedEur: 0,
+  everydayEur: 0,
   goal: "Säästää tavoitteeseen",
   cutFrom: [],
   protect: [],
-  monthlySavings: 60,
+  monthlySavings: 50,
   targetAmount: 1200,
 };
 
@@ -20,6 +23,7 @@ const GOAL_OPTIONS = [
   "Pienentää arjen kuluja",
   "Pitää nykyinen taso",
 ];
+const SBANK_MEDIAN_EUR = 50;
 
 const fmtEur = (n) =>
   Number(n || 0).toLocaleString("fi-FI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -116,28 +120,28 @@ function getCustomerPurchaseCategories(s) {
   return Object.entries(s.everyday_categories_30d || {}).map(([label, amount_eur]) => ({ label, amount_eur }));
 }
 
-function getRecommendedMonthlySavings(s) {
-  const curSave = Number(s.baskets_30d?.monthly_savings_target_eur || 0);
-  const safeWk = Number(s.weekly_safe_to_spend_eur || 0);
-  const maxTotalMo = Math.max(0, Math.floor((curSave + ((safeWk - 15) * 52) / 12) / 10) * 10);
-  return Math.min(300, maxTotalMo);
+function getRecommendedMonthlySavings() {
+  const net = wizardState.incomeEur - wizardState.fixedEur - wizardState.everydayEur;
+  if (net > 40) return Math.min(300, Math.max(20, Math.floor((net * 0.5) / 10) * 10));
+  return 0;
 }
 
 function initWizardDefaults(s) {
   const p = s.profile || {};
+  const b = s.baskets_30d || {};
   const userCats = getCustomerPurchaseCategories(s).map((c) => c.label);
-  const recSave = getRecommendedMonthlySavings(s);
 
   const defaultProtect = userCats.includes("Ruokakauppa") ? ["Ruokakauppa"] : userCats.slice(0, 1);
   const defaultCut = userCats.filter((c) => !defaultProtect.includes(c)).slice(0, 2);
 
-  wizardState = {
-    goal: p.active_goal?.name && GOAL_OPTIONS.includes(p.active_goal.name) ? p.active_goal.name : "Säästää tavoitteeseen",
-    cutFrom: p.onboarded && Array.isArray(p.cut_from) && p.cut_from.length ? [...p.cut_from] : defaultCut,
-    protect: p.onboarded && Array.isArray(p.priorities) && p.priorities.length ? [...p.priorities] : defaultProtect,
-    monthlySavings: p.onboarded ? Number(s.baskets_30d?.monthly_savings_target_eur || 0) : recSave,
-    targetAmount: p.active_goal?.target_eur || 1200,
-  };
+  wizardState.incomeEur = Math.round(Number(s.monthly_income_eur || 0));
+  wizardState.fixedEur = Math.round(Number(b.mandatory_regular_eur || 0));
+  wizardState.everydayEur = Math.round(Number(s.average_everyday_monthly_eur || b.everyday_spent_eur || 0));
+  wizardState.goal = p.active_goal?.name && GOAL_OPTIONS.includes(p.active_goal.name) ? p.active_goal.name : "Säästää tavoitteeseen";
+  wizardState.cutFrom = p.onboarded && Array.isArray(p.cut_from) && p.cut_from.length ? [...p.cut_from] : defaultCut;
+  wizardState.protect = p.onboarded && Array.isArray(p.priorities) && p.priorities.length ? [...p.priorities] : defaultProtect;
+  wizardState.monthlySavings = p.onboarded ? Math.round(Number(b.monthly_savings_target_eur || 0)) : getRecommendedMonthlySavings();
+  wizardState.targetAmount = p.active_goal?.target_eur || 1200;
 }
 
 function openOnboardingScreen(startStep = 1) {
@@ -167,11 +171,29 @@ async function handleOnboardingNext() {
   }
 }
 
+function toggleEditIoPanel() {
+  document.getElementById("editIoPanel")?.classList.toggle("hidden");
+}
+
+function onEditIoChange() {
+  const inc = Math.max(0, Math.round(Number(document.getElementById("editIncomeInp")?.value || 0)));
+  const fix = Math.max(0, Math.round(Number(document.getElementById("editFixedInp")?.value || 0)));
+  const evd = Math.max(0, Math.round(Number(document.getElementById("editEverydayInp")?.value || 0)));
+  wizardState.incomeEur = inc;
+  wizardState.fixedEur = fix;
+  wizardState.everydayEur = evd;
+
+  document.getElementById("ioIncomeTotal").textContent = `+${fmtWholeEur(inc)}`;
+  document.getElementById("ioExpenseTotal").textContent = `–${fmtWholeEur(fix + evd)}`;
+  document.getElementById("ioFixedVal").textContent = fmtWholeEur(fix);
+  document.getElementById("ioEverydayVal").textContent = fmtWholeEur(evd);
+}
+
 function renderOnboardingStep() {
   const s = currentSnapshot;
   if (!s) return;
-  const b = s.baskets_30d;
   const userCats = getCustomerPurchaseCategories(s);
+  const fixedCats = (s.mandatory_categories_list || []).filter((x) => x.amount_eur > 0);
 
   document.getElementById("obStepText").textContent = `Vaihe ${wizardStep} / 3`;
   document.getElementById("obProgressFill").style.width = `${(wizardStep / 3) * 100}%`;
@@ -181,21 +203,62 @@ function renderOnboardingStep() {
   const bodyEl = document.getElementById("obBody");
 
   if (wizardStep === 1) {
-    const catRows = userCats
+    const totalExpenses = wizardState.fixedEur + wizardState.everydayEur;
+    const fixedRows = fixedCats
+      .slice(0, 4)
+      .map((c) => `<div class="ob-cat-row"><span>${escapeHtml(c.label)}</span><strong class="tabular">${fmtWholeEur(c.amount_eur)} / kk</strong></div>`)
+      .join("");
+    const everydayRows = userCats
       .slice(0, 5)
       .map((c) => `<div class="ob-cat-row"><span>${escapeHtml(c.label)}</span><strong class="tabular">${fmtWholeEur(c.amount_eur)} / kk</strong></div>`)
       .join("");
 
     bodyEl.innerHTML = `
-      <h2 class="ob-title">Kuukauden kulusi</h2>
-      <p class="ob-subtitle">Tiliotteesi perusteella kuukauden tulot ja menot jakautuvat seuraavasti.</p>
-      <div class="ob-summary-cards">
-        <div class="ob-sum-tile"><span>Tulot</span><strong class="tabular">${fmtWholeEur(s.monthly_income_eur)}</strong></div>
-        <div class="ob-sum-tile"><span>Kiinteät</span><strong class="tabular">${fmtWholeEur(b.mandatory_regular_eur)}</strong></div>
-        <div class="ob-sum-tile"><span>Arki</span><strong class="tabular">${fmtWholeEur(s.average_everyday_monthly_eur || b.everyday_spent_eur)}</strong></div>
+      <h2 class="ob-title">Kuukauden tulot ja menot</h2>
+      <p class="ob-subtitle">Tarkista tiliotteeltasi tunnistetut kuukausitulot ja menot. Voit tarvittaessa muokata lukuja.</p>
+
+      <div class="io-summary-grid">
+        <div class="io-box income">
+          <div>
+            <div class="io-tag">Tulot / kk</div>
+            <div class="io-total tabular" id="ioIncomeTotal">+${fmtWholeEur(wizardState.incomeEur)}</div>
+          </div>
+          <div class="io-sub-split"><span>Palkka ja etuudet</span></div>
+        </div>
+
+        <div class="io-box expenses">
+          <div>
+            <div class="io-tag">Menot / kk</div>
+            <div class="io-total tabular" id="ioExpenseTotal">–${fmtWholeEur(totalExpenses)}</div>
+          </div>
+          <div class="io-sub-split">
+            <div class="io-sub-row"><span>Kiinteät</span><strong class="tabular" id="ioFixedVal">${fmtWholeEur(wizardState.fixedEur)}</strong></div>
+            <div class="io-sub-row"><span>Arki</span><strong class="tabular" id="ioEverydayVal">${fmtWholeEur(wizardState.everydayEur)}</strong></div>
+          </div>
+        </div>
       </div>
-      <div class="ob-section-label">Suurimmat arjen ostokategoriasi</div>
-      <div class="ob-cat-list">${catRows || '<div class="item-sub">Ei arjen ostoja</div>'}</div>`;
+
+      <button type="button" class="edit-io-toggle" onclick="toggleEditIoPanel()">Muokkaa tuloja tai menoja</button>
+      <div id="editIoPanel" class="edit-io-panel hidden">
+        <div class="edit-io-field">
+          <label for="editIncomeInp">Tulot (€)</label>
+          <input id="editIncomeInp" type="number" min="0" step="50" value="${wizardState.incomeEur}" oninput="onEditIoChange()" />
+        </div>
+        <div class="edit-io-field">
+          <label for="editFixedInp">Kiinteät (€)</label>
+          <input id="editFixedInp" type="number" min="0" step="25" value="${wizardState.fixedEur}" oninput="onEditIoChange()" />
+        </div>
+        <div class="edit-io-field">
+          <label for="editEverydayInp">Arki (€)</label>
+          <input id="editEverydayInp" type="number" min="0" step="25" value="${wizardState.everydayEur}" oninput="onEditIoChange()" />
+        </div>
+      </div>
+
+      <div class="ob-section-label">Suurimmat kiinteät menot</div>
+      <div class="ob-cat-list">${fixedRows || '<div class="item-sub">Ei tunnistettuja kiinteitä menoja</div>'}</div>
+
+      <div class="ob-section-label">Arjen ostokategoriasi</div>
+      <div class="ob-cat-list">${everydayRows || '<div class="item-sub">Ei arjen ostoja</div>'}</div>`;
   } else if (wizardStep === 2) {
     const goalRadios = GOAL_OPTIONS.map((opt) => {
       const sel = wizardState.goal === opt;
@@ -222,9 +285,9 @@ function renderOnboardingStep() {
 
     bodyEl.innerHTML = `
       <h2 class="ob-title">Omat valinnat</h2>
-      <p class="ob-subtitle">Valitse päätavoite sekä ostokategoriat toteutuneen kulutuksesi pohjalta.</p>
+      <p class="ob-subtitle">Valitse tavoitteesi sekä ostokategoriat toteutuneen kulutuksesi pohjalta.</p>
 
-      <div class="ob-section-label" style="margin-top:4px;">Mitä haluaisit tehdä kuluillesi?</div>
+      <div class="ob-section-label" style="margin-top:4px;">Mikä on tavoitteesi?</div>
       <div class="ob-radio-list" id="obGoalList">${goalRadios}</div>
 
       <div class="ob-section-label">Mistä ostoistasi voit tarvittaessa säästää?</div>
@@ -233,15 +296,14 @@ function renderOnboardingStep() {
       <div class="ob-section-label">Mistä et halua tinkiä?</div>
       <div class="pill-grid" id="obProtectGrid">${protectPills}</div>`;
   } else {
-    const currentSave = Number(b.monthly_savings_target_eur || 0);
-    const projSafe = Math.round(s.weekly_safe_to_spend_eur - ((wizardState.monthlySavings - currentSave) * 12) / 52);
+    const estProjSafe = computeProjectedWeeklySafe(wizardState.monthlySavings);
     const saveWk = Math.round((wizardState.monthlySavings * 12) / 52);
     const months = wizardState.monthlySavings > 0 ? Math.ceil(wizardState.targetAmount / wizardState.monthlySavings) : 0;
-    const recMo = getRecommendedMonthlySavings(s);
+    const recMo = getRecommendedMonthlySavings();
 
     bodyEl.innerHTML = `
       <h2 class="ob-title">Aseta tavoitteesi</h2>
-      <p class="ob-subtitle">Säädä kuukausisäästö ja tavoitesumma liukusäätimillä.</p>
+      <p class="ob-subtitle">Säädä kuukausisäästö ja tavoitesumma liukusäätimillä. S-Pankin asiakkaiden mediaanisäästö oli 50 €/kk (31.1.2026).</p>
 
       <div class="slider-block">
         <div class="slider-head">
@@ -250,10 +312,10 @@ function renderOnboardingStep() {
         </div>
         <input id="wizSaveInput" type="range" class="suunta-range" min="0" max="500" step="10" value="${wizardState.monthlySavings}" oninput="onWizardSavingsSlide(this.value)" />
         <div class="slider-live-note">
-          <span>Viikon käyttövara: <strong id="wizWeeklyPreview" class="tabular">${projSafe} €</strong></span>
+          <span>Viikon käyttövara: <strong id="wizWeeklyPreview" class="tabular">${estProjSafe} €</strong></span>
           <span>Vuodessa: <strong id="wizYearlyPreview" class="tabular">+${wizardState.monthlySavings * 12} €</strong></span>
         </div>
-        <div id="wizDeficitWarn" class="deficit-warn-box ${projSafe < 0 ? "" : "hidden"}">
+        <div id="wizDeficitWarn" class="deficit-warn-box ${estProjSafe < 0 ? "" : "hidden"}">
           <span>Käyttövara menee miinukselle. Suositus enintään ${recMo} €/kk.</span>
           <button type="button" class="btn-subtle" onclick="applyRecommendedWizardSavings(${recMo})">Suositus</button>
         </div>
@@ -270,11 +332,24 @@ function renderOnboardingStep() {
   }
 }
 
+function computeProjectedWeeklySafe(monthlySavingsVal) {
+  const s = currentSnapshot;
+  if (!s) return 0;
+  const irreg = Number(s.baskets_30d?.irregular_reserve_eur || 35);
+  const netAvail = wizardState.incomeEur - wizardState.fixedEur - irreg - monthlySavingsVal;
+  const effMonthlyBudget =
+    netAvail >= wizardState.everydayEur && wizardState.everydayEur > 0
+      ? wizardState.everydayEur
+      : netAvail > 120
+      ? netAvail
+      : Math.max(100, wizardState.everydayEur - monthlySavingsVal);
+  const wkBudget = (effMonthlyBudget * 12) / 52;
+  return Math.round(wkBudget - Number(s.spent_this_week_eur || 0));
+}
+
 function selectSingleGoal(btnEl) {
   wizardState.goal = btnEl.dataset.goal;
-  document.querySelectorAll("#obGoalList .ob-radio-btn").forEach((b) => {
-    b.classList.toggle("selected", b === btnEl);
-  });
+  document.querySelectorAll("#obGoalList .ob-radio-btn").forEach((b) => b.classList.toggle("selected", b === btnEl));
 }
 
 function toggleCategoryPill(btnEl) {
@@ -310,9 +385,7 @@ function applyRecommendedWizardSavings(recMo) {
 function onWizardSavingsSlide(valRaw) {
   const val = Number(valRaw);
   wizardState.monthlySavings = val;
-  const currentSave = Number(currentSnapshot?.baskets_30d?.monthly_savings_target_eur || 0);
-  const curSafe = Number(currentSnapshot?.weekly_safe_to_spend_eur || 0);
-  const projSafe = Math.round(curSafe - ((val - currentSave) * 12) / 52);
+  const projSafe = computeProjectedWeeklySafe(val);
   const saveWk = Math.round((val * 12) / 52);
   const months = val > 0 ? Math.ceil(wizardState.targetAmount / val) : 0;
 
@@ -344,6 +417,9 @@ async function finishWizard() {
     body: JSON.stringify({
       statement_id: currentCustomerId,
       suunta_enabled: true,
+      monthly_income_eur: wizardState.incomeEur,
+      mandatory_regular_eur: wizardState.fixedEur,
+      everyday_monthly_eur: wizardState.everydayEur,
       priorities: wizardState.protect.length ? wizardState.protect : ["Ruokakauppa"],
       cut_from: wizardState.cutFrom,
       savings_goal_name: wizardState.goal,
@@ -415,7 +491,7 @@ function renderSnapshot(s) {
   document.getElementById("etukorttiReceipts").innerHTML = allReceiptsHtml;
 
   renderBasketsSection(s);
-  renderOpportunitiesSection(s);
+  renderSavingsComparisonSection(s);
 
   const cats = Object.entries(s.everyday_categories_30d || {});
   document.getElementById("categoriesCard").innerHTML = cats.length
@@ -525,56 +601,62 @@ function renderBasketsSection(s) {
     </div>`;
 }
 
-function renderOpportunitiesSection(s) {
-  const opps = s.savings_opportunities || [];
+/* --- SÄÄSTÖVERTAILU (S-Pankin mediaani 31.1.2026 = 50 €/kk) --- */
+function renderSavingsComparisonSection(s) {
   const el = document.getElementById("opportunitiesCard");
-  if (!opps.length) {
-    el.innerHTML = `<div class="item-sub">Valitsemasi prioriteetit suojaavat suurimmat arjen kategoriat.</div>`;
-    return;
+  if (!el) return;
+  const heading = el.previousElementSibling;
+  if (heading) heading.textContent = "Säästövertailu";
+
+  const userSave = Math.round(Number(s.baskets_30d?.monthly_savings_target_eur || 0));
+  const median = Number(s.sbank_median_savings_eur || SBANK_MEDIAN_EUR);
+  const diff = userSave - median;
+  const scaleMax = Math.max(100, userSave, median);
+  const userPct = Math.min(100, Math.round((userSave / scaleMax) * 100));
+  const medianPct = Math.min(100, Math.round((median / scaleMax) * 100));
+
+  let badgeHtml = "";
+  let noteText = "";
+
+  if (diff > 0) {
+    badgeHtml = `<span class="cmp-badge">+${diff} € yli mediaanin</span>`;
+    noteText = `Säästät kuukaudessa <strong>${diff} € enemmän</strong> kuin S-Pankin asiakkaat keskimäärin (mediaani 50 €/kk, 31.1.2026).`;
+  } else if (diff === 0) {
+    badgeHtml = `<span class="cmp-badge">Mediaanitasolla</span>`;
+    noteText = `Kuukausisäästösi vastaa täsmälleen S-Pankin asiakkaiden mediaania (50 €/kk, 31.1.2026).`;
+  } else {
+    badgeHtml = `<span class="cmp-badge below">${Math.abs(diff)} € mediaaniin</span>`;
+    noteText = `S-Pankin asiakkaiden mediaanisäästö oli <strong>50 €/kk</strong> (31.1.2026). Jo +${Math.abs(diff)} €/kk nostaa sinut mediaanitasolle.`;
   }
-  el.innerHTML = opps
-    .map((o, idx) => {
-      const avg = Number(o.monthly_average_eur || 0);
-      const save20 = Math.round(avg * 0.2);
-      const save20Wk = Math.max(1, Math.round((save20 * 12) / 52));
-      return `
-        <div class="slider-block" style="margin-bottom:${idx === opps.length - 1 ? 0 : 10}px;">
-          <div class="slider-head">
-            <span><strong>${escapeHtml(o.category_fi)}</strong> (${fmtWholeEur(avg)}/kk)</span>
-            <strong id="oppVal_${idx}" class="tabular">-20 % · +${save20} €/kk</strong>
-          </div>
-          <input type="range" class="suunta-range" min="5" max="50" step="5" value="20" oninput="updateOppSlider(${idx}, ${avg}, this.value)" />
-          <div class="row-between" style="margin-top:6px;">
-            <span id="oppSub_${idx}" class="item-sub">Vapauttaa ${save20Wk} €/vk (${save20 * 12} €/v)</span>
-            <button id="oppBtn_${idx}" class="btn-subtle" data-pct="20" onclick="applyQuickCategoryCut('${escapeHtml(o.category_fi)}', ${avg}, this.dataset.pct)">Ota käyttöön</button>
-          </div>
-        </div>`;
-    })
-    .join("");
-}
 
-function updateOppSlider(idx, avgMonthly, pctRaw) {
-  const pct = Number(pctRaw);
-  const saveMo = Math.round((avgMonthly * pct) / 100);
-  const saveWk = Math.max(1, Math.round((saveMo * 12) / 52));
-  document.getElementById(`oppVal_${idx}`).textContent = `-${pct} % · +${saveMo} €/kk`;
-  document.getElementById(`oppSub_${idx}`).textContent = `Vapauttaa ${saveWk} €/vk (${saveMo * 12} €/v)`;
-  document.getElementById(`oppBtn_${idx}`).dataset.pct = String(pct);
-}
+  el.innerHTML = `
+    <div class="cmp-header">
+      <strong style="font-size:14.5px;">Sinä verrattuna muihin säästäjiin</strong>
+      ${badgeHtml}
+    </div>
 
-async function applyQuickCategoryCut(labelFi, avgMonthly, pctRaw) {
-  const pct = Number(pctRaw || 20);
-  const saveMo = Math.max(1, Math.round((avgMonthly * pct) / 100));
-  const saveWk = Math.max(1, Math.round((saveMo * 12) / 52));
-  await applyPlanObject({
-    plan_id: `quick_cut_${labelFi}_${pct}`,
-    title: `${labelFi} -${pct} %`,
-    summary: `Siirretään ${saveWk} €/vk (${saveMo} €/kk) säästöön.`,
-    impact_weekly_eur: -saveWk,
-    monthly_savings_delta_eur: saveMo,
-    everyday_budget_delta_eur: -saveMo,
-    buffer_delta_eur: 0,
-  });
+    <div class="cmp-row">
+      <div class="cmp-row-top">
+        <span>Sinun kuukausisäästösi</span>
+        <strong class="tabular" style="color:var(--s-green);">${userSave} € / kk</strong>
+      </div>
+      <div class="cmp-track"><div class="cmp-fill-user" style="width:${userPct}%"></div></div>
+    </div>
+
+    <div class="cmp-row" style="margin-bottom:4px;">
+      <div class="cmp-row-top">
+        <span style="color:var(--s-muted);">S-Pankin asiakkaiden mediaani (31.1.2026)</span>
+        <strong class="tabular">${median} € / kk</strong>
+      </div>
+      <div class="cmp-track"><div class="cmp-fill-median" style="width:${medianPct}%"></div></div>
+    </div>
+
+    <div class="cmp-note">
+      <div>${noteText}</div>
+      <div style="margin-top:8px;">
+        <button type="button" class="btn-subtle" onclick="openOnboardingScreen(3)">Muokkaa säästötavoitetta</button>
+      </div>
+    </div>`;
 }
 
 function renderReceiptRow(tx) {

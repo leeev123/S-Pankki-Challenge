@@ -15,12 +15,7 @@ from app.database import (
     save_profile,
 )
 from app.schemas import ApplyPlanRequest, ChatRequest, ChatResponse, OnboardingRequest
-from finance.engine import (
-    SAMPLE_CUST_PATH,
-    SAMPLE_TX_PATH,
-    get_financial_snapshot,
-    list_customers,
-)
+from finance.engine import SAMPLE_CUST_PATH, SAMPLE_TX_PATH, get_financial_snapshot, list_customers
 
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
@@ -66,10 +61,7 @@ def api_customers():
 @app.get("/api/state/{statement_id}")
 def api_state(statement_id: str):
     try:
-        return {
-            "snapshot": get_financial_snapshot(statement_id),
-            "history": get_history(statement_id),
-        }
+        return {"snapshot": get_financial_snapshot(statement_id), "history": get_history(statement_id)}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -77,17 +69,22 @@ def api_state(statement_id: str):
 @app.post("/api/onboarding")
 def api_onboarding(payload: OnboardingRequest):
     profile = get_profile(payload.statement_id)
-    profile.update({
+    updates = {
         "suunta_enabled": payload.suunta_enabled,
         "onboarded": True,
         "priorities": payload.priorities,
         "cut_from": payload.cut_from,
         "monthly_savings_target_eur": payload.savings_goal_monthly_eur,
-        "active_goal": {
-            "name": payload.savings_goal_name,
-            "target_eur": 1200.0,
-        },
-    })
+        "active_goal": {"name": payload.savings_goal_name, "target_eur": 1200.0},
+    }
+    if payload.monthly_income_eur is not None and payload.monthly_income_eur >= 0:
+        updates["custom_monthly_income_eur"] = payload.monthly_income_eur
+    if payload.mandatory_regular_eur is not None and payload.mandatory_regular_eur >= 0:
+        updates["custom_mandatory_regular_eur"] = payload.mandatory_regular_eur
+    if payload.everyday_monthly_eur is not None and payload.everyday_monthly_eur >= 0:
+        updates["custom_everyday_monthly_eur"] = payload.everyday_monthly_eur
+
+    profile.update(updates)
     save_profile(payload.statement_id, profile)
     return {"snapshot": get_financial_snapshot(payload.statement_id)}
 
@@ -103,15 +100,11 @@ def api_toggle_suunta(statement_id: str, enabled: bool = True):
 @app.post("/api/reset/{statement_id}")
 def api_reset_statement(statement_id: str):
     reset_statement_state(statement_id)
-    return {
-        "snapshot": get_financial_snapshot(statement_id),
-        "history": get_history(statement_id),
-    }
+    return {"snapshot": get_financial_snapshot(statement_id), "history": get_history(statement_id)}
 
 
 @app.post("/api/reset-all")
 def api_reset_all():
-    """Nollaa koko app_state.json-tilan uloskirjautuessa tai uutta istuntoa aloitettaessa."""
     reset_all_state()
     return {"ok": True}
 
@@ -120,14 +113,8 @@ def api_reset_all():
 def api_chat(payload: ChatRequest):
     append_history(payload.statement_id, {"role": "user", "content": payload.message, "action_cards": []})
     history = get_history(payload.statement_id)
-
     result = run_agent(payload.statement_id, payload.message, history)
-
-    append_history(
-        payload.statement_id,
-        {"role": "assistant", "content": result["reply"], "action_cards": result["action_cards"]},
-    )
-
+    append_history(payload.statement_id, {"role": "assistant", "content": result["reply"], "action_cards": result["action_cards"]})
     return ChatResponse(
         reply=result["reply"],
         action_cards=result["action_cards"],
@@ -143,20 +130,13 @@ def api_apply_plan(payload: ApplyPlanRequest):
 
     profile["onboarded"] = True
     profile["monthly_savings_target_eur"] = max(0.0, base_savings + payload.monthly_savings_delta_eur)
-    profile["everyday_adjustment_eur"] = (
-        float(profile.get("everyday_adjustment_eur", 0.0)) + payload.everyday_budget_delta_eur
-    )
-    profile["current_buffer_eur"] = max(
-        0.0, float(profile.get("current_buffer_eur", 850.0)) + payload.buffer_delta_eur
-    )
+    profile["everyday_adjustment_eur"] = float(profile.get("everyday_adjustment_eur", 0.0)) + payload.everyday_budget_delta_eur
+    profile["current_buffer_eur"] = max(0.0, float(profile.get("current_buffer_eur", 850.0)) + payload.buffer_delta_eur)
     if payload.goal_name:
-        profile["active_goal"] = {
-            "name": payload.goal_name,
-            "target_eur": payload.goal_target_eur or 1200.0,
-        }
+        profile["active_goal"] = {"name": payload.goal_name, "target_eur": payload.goal_target_eur or 1200.0}
     save_profile(payload.statement_id, profile)
 
-    confirm_msg = f"Suunnitelma **{payload.title}** otettu käyttöön. Päivitin viikoittaisen käyttövarasi ja tavoitteesi."
+    confirm_msg = f"Suunnitelma **{payload.title}** otettu käyttöön."
     append_history(payload.statement_id, {"role": "assistant", "content": confirm_msg, "action_cards": []})
     return {"snapshot": get_financial_snapshot(payload.statement_id), "history": get_history(payload.statement_id)}
 
