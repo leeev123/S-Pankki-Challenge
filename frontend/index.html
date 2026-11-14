@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>S-mobiili | S-AI Talousvalmentaja</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="phone-shell">
+    <!-- Yläpalkki S-mobiilin tyyliin -->
+    <header class="topbar">
+      <button class="icon-btn" id="openOnboardingBtn" title="Käyttöönotto & Arvot">⚙️</button>
+      <div class="brand-title">S-mobiili <span class="badge">S-AI</span></div>
+      <button class="icon-btn" onclick="switchTab('chat')" title="Avaa S-AI Valmentaja">💬</button>
+    </header>
+
+    <main class="content">
+      <!-- 1. KOTI-NÄKYMÄ (Viikon käyttövara etusivulla) -->
+      <section id="tab-home" class="tab-panel active">
+        <div class="hero-section">
+          <p class="hero-subtitle" id="dailyHint">Turvallinen päivävara ~36 € / pv</p>
+          <!-- S-mobiilin vihreä talokuvio näyttää viikon jäljellä olevan käyttövaran -->
+          <div class="house-card">
+            <div class="house-roof"></div>
+            <div class="house-body">
+              <span class="house-label">Viikon käyttövara</span>
+              <strong class="house-amount" id="weeklySafeAmount">0,00 €</strong>
+            </div>
+          </div>
+          <p class="hero-caption" id="goalCaption">Budjetista jäljellä tällä viikolla</p>
+          <div class="dots">
+            <span class="dot active"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+
+        <div class="mint-surface">
+          <!-- Pikatoiminnot (S-mobiilin vihreät ympyrät) -->
+          <div class="quick-actions">
+            <button class="qa-item" onclick="askPreset('Haluan ostaa 1 200 € läppärin')">
+              <span class="qa-circle">💻</span>
+              <span>Suunnittele ostos</span>
+            </button>
+            <button class="qa-item" onclick="switchTab('plan')">
+              <span class="qa-circle">📊</span>
+              <span>3 koria</span>
+            </button>
+            <button class="qa-item" onclick="askPreset('Tuli yllättävä 350 € autohuolto')">
+              <span class="qa-circle">⚡</span>
+              <span>Yllättävä meno</span>
+            </button>
+          </div>
+
+          <!-- Tilit ja kortit -->
+          <h2 class="section-title">Tilit ja kortit</h2>
+          <div class="card">
+            <div class="row-between">
+              <div class="row-left">
+                <span class="s-icon">S</span>
+                <div>
+                  <div class="item-title">S-Tili</div>
+                  <div class="item-sub">Puskuri: <span id="bufferAmount">850,00 €</span></div>
+                </div>
+              </div>
+              <strong class="amount-green" id="accountBalance">853,34 €</strong>
+            </div>
+            <div class="divider"></div>
+            <div class="row-left">
+              <span class="card-chip">VISA</span>
+              <div>
+                <div class="item-title">S-Etukortti Visa Debit</div>
+                <div class="item-sub">Debit **** 9460</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kuitit & tapahtumat -->
+          <div class="row-between section-header">
+            <h2 class="section-title">Kuitit & tapahtumat</h2>
+            <button class="link-btn" onclick="askPreset('Millainen kuluttaja olen?')">Analysoi</button>
+          </div>
+          <div class="card" id="recentReceipts"></div>
+        </div>
+      </section>
+
+      <!-- 2. S-AI VALMENTAJA (Chat + hankintasuunnittelu) -->
+      <section id="tab-chat" class="tab-panel">
+        <div class="chat-header-banner">
+          <strong>Urho S-AI</strong>
+          <span>Neuvotteleva talousvalmentaja</span>
+        </div>
+        <div class="chat-chips">
+          <button class="chip" onclick="sendQuickChat('Haluan ostaa 1 200 € läppärin')">💻 1 200 € läppäri</button>
+          <button class="chip" onclick="sendQuickChat('Paljonko voin käyttää tällä viikolla?')">💶 Viikon käyttövara</button>
+          <button class="chip" onclick="sendQuickChat('Paljonko säästän jos vähennän ravintoloita 20 %?')">🍽️ -20 % ravintolat</button>
+          <button class="chip" onclick="sendQuickChat('Millainen kuluttaja olen?')">🧠 Oma profiili</button>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <form class="chat-input-bar" id="chatForm">
+          <input type="text" id="chatInput" placeholder="Kysy tai suunnittele hankinta..." autocomplete="off" />
+          <button type="submit">Lähetä</button>
+        </form>
+      </section>
+
+      <!-- 3. SUUNNITELMA & EXCEL-TILIOTTEEN TUONTI -->
+      <section id="tab-plan" class="tab-panel mint-full">
+        <h2 class="section-title">Elävä taloussuunnitelma</h2>
+        <div class="card" id="basketsCard"></div>
+
+        <h2 class="section-title">Arjen suurimmat kategoriat (30 pv)</h2>
+        <div class="card" id="categoriesCard"></div>
+
+        <h2 class="section-title">Omat arvot & prioriteetit</h2>
+        <div class="card" id="prioritiesCard"></div>
+
+        <!-- Excel-tiliotteen tuonti -->
+        <h2 class="section-title">Tuo synteettinen Excel-tiliote</h2>
+        <div class="card">
+          <p class="item-sub" style="margin-top:0;">
+            Valitse <code>.xlsx</code>-tiedosto (esim. sarakkeet: <em>Kirjauspäivä, Saaja/Maksaja, Summa, Kategoria</em>).
+          </p>
+          <input type="file" id="excelFileInput" accept=".xlsx" style="width:100%; margin-bottom:10px;" />
+          <button class="btn-primary" style="width:100%;" onclick="uploadExcel()">Lataa tiliote (.xlsx)</button>
+          <div id="excelStatus" class="item-sub" style="margin-top:8px;"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Alavalikko -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
+        <span>🏠</span>
+        <small>Koti</small>
+      </button>
+      <button class="nav-btn" data-tab="chat" onclick="switchTab('chat')">
+        <span>✨</span>
+        <small>S-AI</small>
+      </button>
+      <button class="nav-btn" data-tab="plan" onclick="switchTab('plan')">
+        <span>🧭</span>
+        <small>Suunnitelma</small>
+      </button>
+    </nav>
+
+    <!-- Henkilökohtainen käyttöönotto -modaali -->
+    <div id="onboardingModal" class="modal hidden">
+      <div class="modal-card">
+        <h3>Henkilökohtainen käyttöönotto</h3>
+        <p>Valitse asiat, joista <strong>et halua tinkiä</strong>, niin S-AI mukauttaa suunnitelman arvojesi mukaan:</p>
+        <div class="check-group" id="priorityChecks">
+          <label><input type="checkbox" value="Laadukas arkiruoka" checked /> Laadukas arkiruoka</label>
+          <label><input type="checkbox" value="Harrastukset & liikunta" checked /> Harrastukset & liikunta</label>
+          <label><input type="checkbox" value="Matkustaminen" /> Matkustaminen</label>
+        </div>
+        <label class="field-label">Kuukausittainen säästötavoite (€)</label>
+        <input type="number" id="savingsInput" value="250" min="0" step="25" />
+        <div class="modal-actions">
+          <button class="btn-secondary" onclick="closeOnboarding()">Sulje</button>
+          <button class="btn-primary" onclick="saveOnboarding()">Tallenna suunnitelma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

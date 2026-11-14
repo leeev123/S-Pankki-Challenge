@@ -1,0 +1,110 @@
+/* S-mobiilin tunnusomaiset vihreät ja mintunsävyiset värit */
+:root {
+  --s-green: #007a33;
+  --s-green-dark: #005e27;
+  --s-mint: #ebf5ed;
+  --s-text: #18241d;
+  --s-muted: #5d6b62;
+  --s-card: #ffffff;
+  --s-border: #dce8df;
+}
+
+* { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; min-height: 100vh; }
+
+/* Puhelinmainen kehys tietokoneen selaimessa, täysleveys puhelimessa */
+.phone-shell {
+  width: 100%; max-width: 420px; height: 100vh; background: #fff;
+  display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+}
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f4f1;
+}
+.brand-title { font-weight: 700; color: var(--s-green); font-size: 16px; }
+.badge { background: var(--s-mint); color: var(--s-green); padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 4px; }
+.icon-btn { border: none; background: transparent; font-size: 20px; cursor: pointer; }
+
+.content { flex: 1; overflow-y: auto; background: var(--s-mint); }
+.tab-panel { display: none; min-height: 100%; }
+.tab-panel.active { display: block; }
+.mint-full { padding: 16px; }
+
+/* Etusivun talokortti */
+.hero-section { background: #fff; text-align: center; padding: 12px 16px 18px; }
+.hero-subtitle { color: var(--s-green); font-size: 14px; font-weight: 600; margin: 0 0 14px; }
+.house-card { width: 196px; margin: 0 auto; }
+.house-roof {
+  width: 0; height: 0; margin: 0 auto;
+  border-left: 98px solid transparent; border-right: 98px solid transparent;
+  border-bottom: 24px solid var(--s-green);
+}
+.house-body {
+  background: var(--s-green); color: #fff; padding: 10px 14px 18px;
+  border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
+}
+.house-label { display: block; font-size: 13px; opacity: 0.92; margin-bottom: 4px; }
+.house-amount { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+.hero-caption { color: var(--s-green); font-weight: 600; font-size: 13px; margin: 12px 0 8px; }
+.dots { display: flex; justify-content: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #c5d3c9; }
+.dot.active { background: #6b7b70; }
+
+/* Pikatoiminnot ja kortit */
+.mint-surface { padding: 18px 16px 24px; }
+.quick-actions { display: flex; justify-content: space-around; margin-bottom: 22px; }
+.qa-item { border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--s-text); width: 90px; }
+.qa-circle {
+  width: 52px; height: 52px; border-radius: 50%; background: var(--s-green);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px;
+}
+
+.section-title { color: var(--s-green-dark); font-size: 17px; margin: 12px 0 10px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; }
+.link-btn { border: none; background: transparent; color: var(--s-green); font-weight: 600; cursor: pointer; }
+
+.card { background: var(--s-card); border-radius: 14px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 14px; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.row-left { display: flex; align-items: center; gap: 12px; }
+.divider { height: 1px; background: #eef3ef; margin: 12px 0; }
+.s-icon { width: 28px; height: 34px; border: 2px solid var(--s-green); border-radius: 4px; color: var(--s-green); font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.card-chip { background: var(--s-green); color: #fff; font-size: 10px; font-weight: 700; padding: 8px 4px; border-radius: 4px; }
+.item-title { font-weight: 600; font-size: 14px; color: var(--s-text); }
+.item-sub { font-size: 12px; color: var(--s-muted); }
+.amount-green { color: var(--s-green); font-size: 17px; }
+
+/* Chat-näkymä */
+#tab-chat.active { display: flex; flex-direction: column; height: 100%; background: #f6faf7; }
+.chat-header-banner { padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--s-border); display: flex; justify-content: space-between; font-size: 13px; color: var(--s-green-dark); }
+.chat-chips { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #fff; border-bottom: 1px solid #eef3ef; }
+.chip { white-space: nowrap; border: 1px solid var(--s-border); background: var(--s-mint); color: var(--s-green-dark); border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 88%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-line; }
+.msg.user { align-self: flex-end; background: var(--s-green); color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant { align-self: flex-start; background: #fff; color: var(--s-text); border: 1px solid var(--s-border); border-bottom-left-radius: 4px; }
+
+.action-card { background: #f2faf4; border: 1px solid #b8dec2; border-radius: 12px; padding: 10px; margin-top: 8px; }
+.action-card h4 { margin: 0 0 4px; color: var(--s-green-dark); font-size: 14px; }
+.action-card p { margin: 0 0 8px; font-size: 12px; color: var(--s-muted); }
+.apply-btn { background: var(--s-green); color: #fff; border: none; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+.chat-input-bar { display: flex; gap: 8px; padding: 10px 12px; background: #fff; border-top: 1px solid var(--s-border); }
+.chat-input-bar input { flex: 1; border: 1px solid var(--s-border); border-radius: 20px; padding: 10px 14px; font-size: 14px; outline: none; }
+.chat-input-bar button { background: var(--s-green); color: #fff; border: none; border-radius: 20px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+
+/* Alavalikko ja modaali */
+.bottom-nav { display: flex; justify-content: space-around; background: #fff; border-top: 1px solid var(--s-border); padding: 8px 0; }
+.nav-btn { border: none; background: transparent; display: flex; flex-direction: column; align-items: center; color: var(--s-muted); cursor: pointer; font-size: 18px; }
+.nav-btn.active { color: var(--s-green); font-weight: 700; }
+.nav-btn small { font-size: 11px; margin-top: 2px; }
+
+.modal { position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal.hidden { display: none; }
+.modal-card { background: #fff; border-radius: 16px; padding: 18px; width: 100%; }
+.check-group { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; font-size: 14px; }
+.field-label { display: block; font-size: 13px; color: var(--s-muted); margin-bottom: 4px; }
+#savingsInput { width: 100%; padding: 8px; border: 1px solid var(--s-border); border-radius: 8px; margin-bottom: 14px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.btn-primary { background: var(--s-green); color: #fff; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn-secondary { background: #eef3ef; color: var(--s-text); border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; }
