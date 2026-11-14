@@ -1,4 +1,4 @@
 customer_id,customer_postal_code,customer_age, customer name
-CUST_STUDENT_01, 00500, 22, Opiskelija
-CUST_FAMILY_DAD_01, 01700, 42, Mies
-CUST_PENSIONER_01, 01600, 71, Mummo
+CUST_STUDENT_01, 00500, 22, Oona Opiskelija
+CUST_FAMILY_DAD_01, 01700, 42, Matti Meikäläinen
+CUST_PENSIONER_01, 01600, 71, Erja Eläkeläinen
