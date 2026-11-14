@@ -929,23 +929,19 @@ def reset_statement_state(statement_id: str) -> None:
 === .\backend\app\main.py ===
 from pathlib import Path
 import os
-import shutil
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent.orchestrator import GEMINI_MODEL, run_agent
-from app.database import append_history, get_history, get_profile, reset_statement_state, save_profile
+from app.database import append_history, get_history, get_profile, save_profile
 from app.schemas import ApplyPlanRequest, ChatRequest, ChatResponse, OnboardingRequest
 from finance.engine import (
-    DATA_DIR,
+    SAMPLE_CUST_PATH,
     SAMPLE_TX_PATH,
-    build_agent_statement_context,
-    find_uploaded_statement_path,
     get_financial_snapshot,
-    load_statement_transactions,
+    list_customers,
 )
 
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
@@ -961,6 +957,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def disable_static_cache(request: Request, call_next):
+    """Estää selainta näyttämästä vanhaa HTML/CSS/JS-tiedostoa välimuistista."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.get("/api/health")
 def api_health():
     key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -968,90 +974,33 @@ def api_health():
         "ok": True,
         "agent_ready": bool(key and key != "your_api_key_here"),
         "model": GEMINI_MODEL,
-        "sample_db_exists": SAMPLE_TX_PATH.exists(),
+        "sample_db_exists": SAMPLE_TX_PATH.exists() and SAMPLE_CUST_PATH.exists(),
     }
 
 
-@app.get("/api/sample-statement")
-def api_download_sample():
-    """Tarjoaa sample_transactions.csv-mallitiedoston helposti ladattavaksi myös puhelimella."""
-    if not SAMPLE_TX_PATH.exists():
-        raise HTTPException(status_code=404, detail="sample_transactions.csv puuttuu backend/data-kansiosta.")
-    return FileResponse(
-        path=str(SAMPLE_TX_PATH),
-        filename="mallitiliote.csv",
-        media_type="text/csv; charset=utf-8",
-    )
+@app.get("/api/customers")
+def api_customers():
+    """Palauttaa datakansion 3 profiilia: Opiskelija, Työssäkäyvä, Eläkeläinen."""
+    try:
+        return {"customers": list_customers()}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/state/{statement_id}")
 def api_state(statement_id: str):
-    return {
-        "snapshot": get_financial_snapshot(statement_id),
-        "history": get_history(statement_id),
-    }
-
-
-@app.post("/api/upload-statement/{statement_id}")
-async def api_upload_statement(statement_id: str, file: UploadFile = File(...)):
-    """Tallentaa käyttäjän tuoman tiedostomuotoisen tiliotteen (.xlsx, .xls, .csv) ja päivittää luvut."""
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Valitse tiedosto.")
-
-    ext = Path(file.filename).suffix.lower()
-    if ext not in (".xlsx", ".xls", ".csv"):
-        raise HTTPException(status_code=400, detail="Lataa .xlsx-, .xls- tai .csv-muotoinen tiliote.")
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Poistetaan saman istunnon mahdolliset aiemmat ladatut tiedostot
-    for old_ext in (".xlsx", ".xls", ".csv"):
-        (DATA_DIR / f"uploaded_{statement_id}{old_ext}").unlink(missing_ok=True)
-
-    target_path = DATA_DIR / f"uploaded_{statement_id}{ext}"
-    with target_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    load_statement_transactions.cache_clear()
-
     try:
-        snapshot = get_financial_snapshot(statement_id)
-    except Exception as exc:
-        target_path.unlink(missing_ok=True)
-        load_statement_transactions.cache_clear()
-        raise HTTPException(status_code=400, detail=f"Tiedoston luku epäonnistui: {exc}") from exc
-
-    profile = get_profile(statement_id)
-    profile["file_name"] = file.filename
-    save_profile(statement_id, profile)
-
-    append_history(
-        statement_id,
-        {
-            "role": "assistant",
-            "content": f"Tiliote **{file.filename}** ladattu! Analysoin kolme kulutuskoria ja viikoittaisen käyttövarasi.",
-            "action_cards": [],
-        },
-    )
-    return {"snapshot": get_financial_snapshot(statement_id), "history": get_history(statement_id)}
-
-
-@app.post("/api/reset/{statement_id}")
-def api_reset(statement_id: str):
-    """Nollaa tuodun tiliotteen ja keskustelun demotilan alusta."""
-    uploaded = find_uploaded_statement_path(statement_id)
-    if uploaded is not None:
-        uploaded.unlink(missing_ok=True)
-    load_statement_transactions.cache_clear()
-    reset_statement_state(statement_id)
-    return {
-        "snapshot": get_financial_snapshot(statement_id),
-        "history": get_history(statement_id),
-    }
+        return {
+            "snapshot": get_financial_snapshot(statement_id),
+            "history": get_history(statement_id),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/onboarding")
 def api_onboarding(payload: OnboardingRequest):
-    """Aktivoi Suunnan ja tallentaa käyttäjän henkilökohtaiset arvot sekä tavoitteen."""
+    """Tallentaa käyttäjän henkilökohtaiset arvot sekä tavoitteen ja aktivoi Suunnan."""
     profile = get_profile(payload.statement_id)
     profile.update({
         "suunta_enabled": payload.suunta_enabled,
@@ -1070,7 +1019,7 @@ def api_onboarding(payload: OnboardingRequest):
 
 @app.post("/api/toggle-suunta/{statement_id}")
 def api_toggle_suunta(statement_id: str, enabled: bool = True):
-    """Vaihtaa perinteisen pankkinäkymän ja Suunta-näkymän välillä."""
+    """Vaihtaa perinteisen S-mobiilin ja Suunta-näkymän välillä ilman pop-upia."""
     profile = get_profile(statement_id)
     profile["suunta_enabled"] = enabled
     save_profile(statement_id, profile)
@@ -1079,13 +1028,9 @@ def api_toggle_suunta(statement_id: str, enabled: bool = True):
 
 @app.post("/api/chat", response_model=ChatResponse)
 def api_chat(payload: ChatRequest):
-    # 1. Pääkoodi hakee tiliotetiedot tietokannasta (sample_transactions.csv / ladattu tiedosto)
-    statement_context = build_agent_statement_context(payload.statement_id)
-
     append_history(payload.statement_id, {"role": "user", "content": payload.message, "action_cards": []})
     history = get_history(payload.statement_id)
 
-    # 2. Pääkoodi antaa tiedot tekoälyagentille, joka kutsuu laskentaohjelmaa (engine.py)
     result = run_agent(payload.statement_id, payload.message, history)
 
     append_history(
@@ -1207,6 +1152,28 @@ class ChatResponse(BaseModel):
         "name": "Puskuri & Tavoite",
         "target_eur": 1200.0
       }
+    },
+    "CUST_STUDENT_01": {
+      "statement_id": "CUST_STUDENT_01",
+      "display_name": "Tuotu tiliote",
+      "file_name": null,
+      "suunta_enabled": true,
+      "onboarded": false,
+      "priorities": [
+        "Laadukas arkiruoka",
+        "Säästäminen"
+      ],
+      "cut_from": [
+        "Kahvilat",
+        "Taksit"
+      ],
+      "monthly_savings_target_eur": 200.0,
+      "buffer_target_eur": 1500.0,
+      "current_buffer_eur": 850.0,
+      "everyday_adjustment_eur": 0.0,
+      "bonus_eur": 6.84,
+      "bonus_next_tier_eur": 58.08,
+      "active_goal": null
     }
   },
   "histories": {
@@ -1519,6 +1486,55 @@ class ChatResponse(BaseModel):
           }
         ]
       }
+    ],
+    "CUST_STUDENT_01": [
+      {
+        "role": "user",
+        "content": "Ostan 1000 e koneen",
+        "action_cards": []
+      },
+      {
+        "role": "assistant",
+        "content": "Simuloin 1 000 € koneen hankinnan taloustilanteeseesi, jossa puskurisi on tällä hetkellä 850 € ja viikon käyttövara -7,24 €. Laskelman mukaan sinulla on kolme kestävää vaihtoehtoa: voit säästää nykyisellä 200 €/kk tahdilla 5 kuukaudessa pitämällä käyttövaran ennallaan, nipistää 23 €/vk (100 €/kk) ei-kriittisestä arjen kulutuksesta 3 kuukauden tavoitteeseen, tai käyttää nyt 500 € puskurista ja täydentää sen takaisin 75 €/kk tahdilla (-17 €/vk).\n\nVoit hyväksyä haluamasi suunnitelman suoraan toimintokortista. Mikä näistä vaihtoehdoista sopii parhaiten aikatauluusi?",
+        "action_cards": [
+          {
+            "plan_id": "save_steady_1000",
+            "title": "Säästä rauhassa (5 kk)",
+            "summary": "Pidät nykyisen 42 €/vk käyttövaran ennallaan ja saavutat 1000 € tavoitteen 5 kuukaudessa.",
+            "impact_weekly_eur": 0.0,
+            "impact_savings_months": 5,
+            "monthly_savings_delta_eur": 0.0,
+            "everyday_budget_delta_eur": 0.0,
+            "buffer_delta_eur": 0.0,
+            "goal_name": "kone",
+            "goal_target_eur": 1000.0
+          },
+          {
+            "plan_id": "trim_everyday_1000",
+            "title": "Tavoite nopeammin (3 kk)",
+            "summary": "Nipistät 23 €/vk (100 €/kk) ei-kriittisestä arjen kulutuksesta. Säästät kohteen (kone) 3 kuukaudessa.",
+            "impact_weekly_eur": -23.0,
+            "impact_savings_months": 3,
+            "monthly_savings_delta_eur": 100.0,
+            "everyday_budget_delta_eur": -100.0,
+            "buffer_delta_eur": 0.0,
+            "goal_name": "kone",
+            "goal_target_eur": 1000.0
+          },
+          {
+            "plan_id": "hybrid_buffer_1000",
+            "title": "Käytä puskuria & täydennä takaisin",
+            "summary": "Käytät 500 € puskurista nyt ja ohjaat +75 €/kk puskurin palauttamiseen.",
+            "impact_weekly_eur": -17.0,
+            "impact_savings_months": 1,
+            "monthly_savings_delta_eur": 75.0,
+            "everyday_budget_delta_eur": -75.0,
+            "buffer_delta_eur": -500.0,
+            "goal_name": "Puskurin palautus (kone)",
+            "goal_target_eur": 500.0
+          }
+        ]
+      }
     ]
   }
 }
@@ -1617,76 +1633,132 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-import os
 import pandas as pd
 
 from app.database import get_profile
-from finance.excel_loader import parse_statement_file
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 SAMPLE_TX_PATH = DATA_DIR / "sample_transactions.csv"
+SAMPLE_CUST_PATH = DATA_DIR / "sample_customers.csv"
 
 MANDATORY_REGULAR_KEYS = {
     "rent", "vuokra", "housing", "asuminen", "utilities", "sähkö",
-    "telecom", "puhelin", "internet", "insurance", "vakuutus", "loan", "laina", "subscription"
+    "telecom", "puhelin", "internet", "insurance", "vakuutus",
+    "loan", "laina", "subscription", "subscriptions",
 }
 MANDATORY_IRREGULAR_KEYS = {
     "health", "terveys", "pharmacy", "apteekki", "repair", "huolto",
-    "appliances", "kodinkone", "auto", "car_service", "dentist", "lääkäri"
+    "appliances", "kodinkone", "auto", "car_service", "dentist", "lääkäri",
+    "taxes", "vero",
 }
+INVESTMENT_KEYS = {"investments", "investment", "sijoitus", "sijoitukset"}
 
 
-def find_uploaded_statement_path(statement_id: str) -> Path | None:
-    """Etsii käyttäjän lataaman tiliotetiedoston (.xlsx, .xls tai .csv)."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for ext in (".xlsx", ".xls", ".csv"):
-        candidate = DATA_DIR / f"uploaded_{statement_id}{ext}"
-        if candidate.exists():
-            return candidate
-    return None
+def _ensure_data_files() -> None:
+    if not SAMPLE_CUST_PATH.exists():
+        raise FileNotFoundError(f"Tiedosto puuttuu: {SAMPLE_CUST_PATH}")
+    if not SAMPLE_TX_PATH.exists():
+        raise FileNotFoundError(f"Tiedosto puuttuu: {SAMPLE_TX_PATH}")
+
+
+@lru_cache(maxsize=1)
+def _load_all_transactions() -> pd.DataFrame:
+    """Lukee sample_transactions.csv:n kerran (1. rivi otsikko, loput dataa)."""
+    _ensure_data_files()
+    df = pd.read_csv(SAMPLE_TX_PATH)
+    df.columns = [str(c).strip() for c in df.columns]
+    df["customer_id"] = df["customer_id"].astype(str).str.strip()
+    df["tx_date"] = pd.to_datetime(df["tx_date"], errors="coerce")
+    if "tx_timestamp" in df.columns:
+        df["tx_timestamp_dt"] = pd.to_datetime(df["tx_timestamp"], errors="coerce")
+    else:
+        df["tx_timestamp_dt"] = df["tx_date"]
+    df["tx_amount_eur"] = pd.to_numeric(df["tx_amount_eur"], errors="coerce").fillna(0.0)
+    df["balance_after_eur"] = pd.to_numeric(df["balance_after_eur"], errors="coerce").fillna(0.0)
+    df["category"] = df["category"].astype(str).str.strip()
+    df["merchant_id"] = df["merchant_id"].astype(str).str.strip()
+    return df
+
+
+def _derive_role_from_transactions(cust_df: pd.DataFrame) -> str:
+    """Päättelee roolin suoraan datakansion tulokategoriasta keksimättä uutta dataa."""
+    income_cats = {
+        str(c).strip().lower()
+        for c in cust_df[cust_df["tx_amount_eur"] > 0]["category"].tolist()
+    }
+    if "pension" in income_cats:
+        return "Eläkeläinen"
+    if "salary" in income_cats and "benefits" not in income_cats:
+        return "Työssäkäyvä"
+    if "benefits" in income_cats:
+        return "Opiskelija"
+    return "Asiakas"
+
+
+@lru_cache(maxsize=4)
+def list_customers() -> list[dict[str, Any]]:
+    """Palauttaa sample_customers.csv:n 3 profiilia ja niiden datan sample_transactions.csv:stä."""
+    _ensure_data_files()
+    cdf = pd.read_csv(SAMPLE_CUST_PATH, dtype=str)
+    cdf.columns = [str(c).strip() for c in cdf.columns]
+    for col in cdf.columns:
+        cdf[col] = cdf[col].fillna("").astype(str).str.strip()
+
+    all_tx = _load_all_transactions()
+    customers: list[dict[str, Any]] = []
+
+    for row in cdf.to_dict(orient="records"):
+        cid = str(row.get("customer_id", "")).strip()
+        if not cid:
+            continue
+        csv_name = str(row.get("customer name") or row.get("customer_name") or cid).strip()
+        age = str(row.get("customer_age", "")).strip()
+        postal = str(row.get("customer_postal_code", "")).strip()
+
+        cust_tx = all_tx[all_tx["customer_id"] == cid].sort_values(
+            ["tx_date", "tx_timestamp_dt"], ascending=[False, False]
+        )
+        balance = float(cust_tx["balance_after_eur"].iloc[0]) if not cust_tx.empty else 0.0
+        role_label = _derive_role_from_transactions(cust_tx) if not cust_tx.empty else csv_name
+
+        customers.append({
+            "customer_id": cid,
+            "display_name": csv_name,
+            "role_label": role_label,
+            "customer_age": age,
+            "customer_postal_code": postal,
+            "account_balance_eur": round(balance, 2),
+        })
+    return customers
+
+
+def get_customer_info(customer_id: str) -> dict[str, Any]:
+    target = str(customer_id).strip()
+    for cust in list_customers():
+        if cust["customer_id"] == target:
+            return cust
+    raise ValueError(f"Asiakasta '{target}' ei löytynyt tiedostosta sample_customers.csv")
 
 
 @lru_cache(maxsize=16)
-def load_statement_transactions(statement_id: str = "DEMO_TILIOTE") -> tuple[pd.DataFrame, str, bool]:
-    """
-    Hakee tiliotetapahtumat tietokannasta:
-    1) Jos käyttäjä on ladannut oman tiedoston (uploaded_<statement_id>.xlsx/.csv), luetaan se.
-    2) Muutoin luetaan oletustietokanta sample_transactions.csv:stä.
-    Palauttaa: (DataFrame, lähteen_nimi, onko_käyttäjän_lataama_tiedosto)
-    """
-    uploaded_path = find_uploaded_statement_path(statement_id)
-    if uploaded_path is not None:
-        df = parse_statement_file(uploaded_path, statement_id=statement_id)
-        return df, uploaded_path.name, True
-
-    tx_env = Path(os.getenv("SBANK_TX_CSV", str(SAMPLE_TX_PATH)))
-    if not tx_env.is_absolute():
-        tx_env = Path(__file__).resolve().parents[1] / tx_env
-    tx_path = tx_env if tx_env.exists() else SAMPLE_TX_PATH
-
-    if not tx_path.exists():
-        raise FileNotFoundError(f"Tietokantatiedostoa ei löytynyt polusta {tx_path}")
-
-    df = parse_statement_file(tx_path, statement_id=statement_id)
-
-    # Jos sample_transactions.csv sisältää useamman customer_id:n, otetaan ensimmäinen yhtenäinen tiliote
-    raw = pd.read_csv(tx_path)
-    if "customer_id" in raw.columns and not raw.empty:
-        first_cid = str(raw["customer_id"].iloc[0])
-        filtered_raw = raw[raw["customer_id"].astype(str) == first_cid].copy()
-        filtered_raw["tx_date"] = pd.to_datetime(filtered_raw["tx_date"], errors="coerce").fillna(pd.Timestamp.today())
-        filtered_raw["tx_amount_eur"] = pd.to_numeric(filtered_raw["tx_amount_eur"], errors="coerce").fillna(0.0)
-        filtered_raw["balance_after_eur"] = pd.to_numeric(filtered_raw["balance_after_eur"], errors="coerce").fillna(0.0)
-        filtered_raw = filtered_raw.sort_values("tx_date", ascending=False)
-        return filtered_raw, tx_path.name, False
-
-    return df, tx_path.name, False
+def load_statement_transactions(statement_id: str = "CUST_STUDENT_01") -> tuple[pd.DataFrame, str, bool]:
+    """Lukee vain yhden valitun customer_id:n tapahtumat sample_transactions.csv:stä."""
+    target = str(statement_id).strip()
+    get_customer_info(target)
+    all_tx = _load_all_transactions()
+    df = all_tx[all_tx["customer_id"] == target].copy()
+    if df.empty:
+        raise ValueError(f"Asiakkaalle '{target}' ei löytynyt tapahtumia sample_transactions.csv:stä")
+    df = df.sort_values(["tx_date", "tx_timestamp_dt"], ascending=[False, False]).reset_index(drop=True)
+    return df, SAMPLE_TX_PATH.name, False
 
 
 def classify_basket(category: str, amount: float) -> str:
     if amount > 0:
         return "income"
     cat = str(category).strip().lower()
+    if any(k in cat for k in INVESTMENT_KEYS):
+        return "investments"
     if any(k in cat for k in MANDATORY_REGULAR_KEYS):
         return "mandatory_regular"
     if any(k in cat for k in MANDATORY_IRREGULAR_KEYS):
@@ -1694,11 +1766,19 @@ def classify_basket(category: str, amount: float) -> str:
     return "everyday_discretionary"
 
 
-def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]:
-    """Laskee kolmen korin yhteenvedon, viikkokäyttövaran ja tuoreimmat tapahtumat."""
-    df, source_name, has_uploaded = load_statement_transactions(statement_id)
+def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
+    """Laskee kolmen korin yhteenvedon, viikkokäyttövaran ja tuoreimmat tapahtumat yhdelle ID:lle."""
+    target = str(statement_id).strip()
+    cust_info = get_customer_info(target)
+    df, source_name, _ = load_statement_transactions(target)
     df = df.copy()
-    profile = get_profile(statement_id)
+
+    profile = dict(get_profile(target))
+    profile["statement_id"] = target
+    profile["display_name"] = cust_info["display_name"]
+    profile["role_label"] = cust_info["role_label"]
+    profile["customer_age"] = cust_info["customer_age"]
+    profile["customer_postal_code"] = cust_info["customer_postal_code"]
 
     df["basket"] = [
         classify_basket(cat, amt) for cat, amt in zip(df["category"], df["tx_amount_eur"])
@@ -1709,10 +1789,6 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     last_7 = df[df["tx_date"] >= (max_date - pd.Timedelta(days=7))]
 
     monthly_income = float(last_30[last_30["tx_amount_eur"] > 0]["tx_amount_eur"].sum())
-    if monthly_income <= 0:
-        all_income = float(df[df["tx_amount_eur"] > 0]["tx_amount_eur"].sum())
-        monthly_income = all_income if all_income > 0 else 2500.0
-
     mandatory_regular = abs(float(last_30[last_30["basket"] == "mandatory_regular"]["tx_amount_eur"].sum()))
     mandatory_irregular = abs(float(last_30[last_30["basket"] == "mandatory_irregular"]["tx_amount_eur"].sum()))
     everyday_30d = abs(float(last_30[last_30["basket"] == "everyday_discretionary"]["tx_amount_eur"].sum()))
@@ -1730,7 +1806,7 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     weekly_safe_to_spend = round(weekly_budget - spent_this_week, 2)
     daily_safe_to_spend = round(max(0.0, weekly_safe_to_spend) / 4.0, 2)
 
-    account_balance = float(df["balance_after_eur"].iloc[0]) if "balance_after_eur" in df.columns else 853.34
+    account_balance = float(df["balance_after_eur"].iloc[0])
 
     everyday_df = last_30[last_30["basket"] == "everyday_discretionary"]
     by_category = (
@@ -1745,9 +1821,7 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     recent_receipts = []
     for _, row in df.head(10).iterrows():
         tx_d = row["tx_date"]
-        date_label = "Viimeisin päivä" if pd.notna(tx_d) and tx_d.date() == max_date.date() else (
-            tx_d.strftime("%d.%m.%Y") if pd.notna(tx_d) else ""
-        )
+        date_label = tx_d.strftime("%d.%m.%Y") if pd.notna(tx_d) else ""
         recent_receipts.append({
             "date": date_label,
             "merchant": str(row.get("merchant_id", row.get("category", "Ostos"))),
@@ -1756,12 +1830,12 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
             "basket": row["basket"],
         })
 
-    display_file = profile.get("file_name") or source_name
-
     return {
-        "statement_id": statement_id,
-        "has_uploaded_statement": has_uploaded,
-        "source_name": display_file,
+        "statement_id": target,
+        "display_name": cust_info["display_name"],
+        "role_label": cust_info["role_label"],
+        "source_name": cust_info["display_name"],
+        "data_file": source_name,
         "transaction_count": int(len(df)),
         "account_balance_eur": round(account_balance, 2),
         "monthly_income_eur": round(monthly_income, 2),
@@ -1783,11 +1857,12 @@ def get_financial_snapshot(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]
     }
 
 
-def build_agent_statement_context(statement_id: str = "DEMO_TILIOTE") -> dict[str, Any]:
-    """Kokoaa pääkoodia varten tiiviin tiliotepaketin tietokannasta tekoälyagentille annettavaksi."""
+def build_agent_statement_context(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
     snap = get_financial_snapshot(statement_id)
     return {
-        "source_file": snap["source_name"],
+        "customer_id": snap["statement_id"],
+        "display_name": snap["display_name"],
+        "role_label": snap["role_label"],
         "transaction_count": snap["transaction_count"],
         "account_balance_eur": snap["account_balance_eur"],
         "monthly_income_eur": snap["monthly_income_eur"],
@@ -2048,71 +2123,108 @@ def parse_statement_file(file_path: Path, statement_id: str = "DEMO_TILIOTE") ->
     normalized["transaction_type"] = normalized["tx_amount_eur"].apply(lambda x: "CREDIT" if x > 0 else "DEBIT")
     return normalized.sort_values("tx_date", ascending=False)
 === .\frontend\app.js ===
-function getStatementSessionId() {
-  const key = "suunta_statement_id";
-  let id = localStorage.getItem(key);
-  if (!id || !/^[a-zA-Z0-9_-]{4,40}$/.test(id)) {
-    id = "stmt_" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
-
-const currentStatementId = getStatementSessionId();
+let currentCustomerId = null;
 let currentSnapshot = null;
+let currentHistory = [];
 let detailsVisible = true;
+let isSending = false;
+
+const SEND_ARROW_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+const BOT_MINI_AVATAR = `<span class="msg-mini-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>`;
 
 const fmtEur = (n) => Number(n || 0).toFixed(2).replace(".", ",") + " €";
 
-window.addEventListener("DOMContentLoaded", async () => {
-  const res = await fetch(`/api/state/${currentStatementId}`);
-  const data = await res.json();
-  currentSnapshot = data.snapshot;
-
-  if (currentSnapshot.has_uploaded_statement) {
-    document.getElementById("statementGate").classList.add("hidden");
-    document.getElementById("appShell").classList.remove("hidden");
-    renderSnapshot(data.snapshot);
-    renderHistory(data.history);
-  }
-});
-
-function openStatementGate() {
-  document.getElementById("appShell").classList.add("hidden");
-  document.getElementById("statementGate").classList.remove("hidden");
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-async function uploadStatementFromGate(input) {
-  if (!input.files.length) return;
-  const statusEl = document.getElementById("gateStatus");
-  statusEl.textContent = "Ladataan ja analysoidaan tiliotetta...";
+function formatMessageText(text) {
+  return escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+}
 
-  const ok = await uploadStatementFile(input.files[0], statusEl);
-  input.value = "";
-  if (ok) {
-    document.getElementById("statementGate").classList.add("hidden");
-    document.getElementById("appShell").classList.remove("hidden");
-    await loadState();
-    if (!currentSnapshot.profile.suunta_enabled) {
-      openActivatePrompt();
+window.addEventListener("DOMContentLoaded", async () => {
+  await loadProfileGate();
+});
+
+async function loadProfileGate() {
+  const listEl = document.getElementById("profileList");
+  const statusEl = document.getElementById("gateStatus");
+  try {
+    const res = await fetch("/api/customers");
+    if (!res.ok) throw new Error("Profiilien haku epäonnistui");
+    const data = await res.json();
+    const customers = data.customers || [];
+
+    if (!customers.length) {
+      listEl.innerHTML = `<div class="gate-status">Profiileja ei löytynyt datakansiosta.</div>`;
+      return;
     }
+
+    listEl.innerHTML = customers
+      .map((c) => {
+        const iconSvg =
+          c.role_label === "Opiskelija"
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`
+            : c.role_label === "Eläkeläinen"
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`;
+
+        const titleText =
+          c.display_name === c.role_label
+            ? c.display_name
+            : `${c.role_label} · ${c.display_name}`;
+
+        return `
+          <button class="persona-card" onclick="selectProfile('${escapeHtml(c.customer_id)}')">
+            <div class="persona-icon">${iconSvg}</div>
+            <div class="persona-info">
+              <strong>${escapeHtml(titleText)}</strong>
+              <span>${escapeHtml(c.customer_age)} v · Postinumero ${escapeHtml(c.customer_postal_code)} · Saldo ${fmtEur(c.account_balance_eur)}</span>
+            </div>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>`;
+      })
+      .join("");
+    statusEl.textContent = "";
+  } catch (err) {
+    listEl.innerHTML = "";
+    statusEl.textContent = `Virhe profiilien latauksessa: ${err.message}`;
   }
+}
+
+async function selectProfile(customerId) {
+  currentCustomerId = customerId;
+  document.getElementById("profileGate").classList.add("hidden");
+  document.getElementById("appShell").classList.remove("hidden");
+  switchTab("home");
+  await loadState();
+}
+
+function openProfileGate() {
+  document.getElementById("appShell").classList.add("hidden");
+  document.getElementById("profileGate").classList.remove("hidden");
 }
 
 async function loadState() {
-  const res = await fetch(`/api/state/${currentStatementId}`);
+  if (!currentCustomerId) return;
+  const res = await fetch(`/api/state/${encodeURIComponent(currentCustomerId)}`);
   const data = await res.json();
   currentSnapshot = data.snapshot;
-  renderSnapshot(data.snapshot);
-  renderHistory(data.history);
+  currentHistory = data.history || [];
+  renderSnapshot(currentSnapshot);
+  renderHistory(currentHistory);
 }
 
 function renderSnapshot(s) {
   const p = s.profile || {};
   const suuntaEnabled = Boolean(p.suunta_enabled);
 
-  const badge = document.getElementById("activeStatementBadge");
-  badge.textContent = s.source_name || "Tuotu tiliote";
+  const badge = document.getElementById("activeProfileBadge");
+  badge.textContent = s.display_name || p.display_name || s.role_label;
   badge.classList.remove("hidden");
 
   document.getElementById("classicHero").classList.toggle("hidden", suuntaEnabled);
@@ -2121,6 +2233,8 @@ function renderSnapshot(s) {
 
   document.getElementById("suuntaHero").classList.toggle("hidden", !suuntaEnabled);
   document.getElementById("suuntaQuickActions").classList.toggle("hidden", !suuntaEnabled);
+  document.getElementById("homeSuuntaChatCard").classList.toggle("hidden", !suuntaEnabled);
+
   document.getElementById("dot1").classList.toggle("active", !suuntaEnabled);
   document.getElementById("dot2").classList.toggle("active", suuntaEnabled);
 
@@ -2139,7 +2253,7 @@ function renderSnapshot(s) {
   const firstTx = (s.recent_transactions || [])[0];
   document.getElementById("homeReceiptCard").innerHTML = firstTx
     ? renderReceiptRow(firstTx)
-    : `<div class="item-sub">Ei vielä tapahtumia</div>`;
+    : `<div class="item-sub">Ei tapahtumia</div>`;
 
   const allReceiptsHtml = (s.recent_transactions || []).map(renderReceiptRow).join('<div class="divider"></div>');
   document.getElementById("allReceiptsCard").innerHTML = allReceiptsHtml;
@@ -2158,14 +2272,14 @@ function renderSnapshot(s) {
 
   const cats = Object.entries(s.everyday_categories_30d || {});
   document.getElementById("categoriesCard").innerHTML = cats.length
-    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${k}</span><strong class="nowrap">${fmtEur(v)}</strong></div>`).join("")
+    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${escapeHtml(k)}</span><strong class="nowrap">${fmtEur(v)}</strong></div>`).join("")
     : `<div class="item-sub">Ei arjen tapahtumia</div>`;
 
   document.getElementById("meProfileCard").innerHTML = `
-    <div class="item-title">${s.source_name || "Tuotu tiliote"}</div>
-    <div class="item-sub">${s.transaction_count} tapahtumaa · Kuukausitulot ${fmtEur(s.monthly_income_eur)}</div>
+    <div class="item-title">${escapeHtml(s.display_name || s.role_label)} (${escapeHtml(s.role_label)})</div>
+    <div class="item-sub">${escapeHtml(p.customer_age)} v · ${escapeHtml(p.customer_postal_code)} · ${s.transaction_count} tapahtumaa · Tulot (30 pv) ${fmtEur(s.monthly_income_eur)}</div>
     <div class="divider"></div>
-    <div class="item-sub">Tärkeät asiat: ${(p.priorities || []).join(", ")}</div>
+    <div class="item-sub">Tärkeät asiat: ${escapeHtml((p.priorities || []).join(", "))}</div>
   `;
   document.getElementById("meToggleSuuntaBtn").textContent = suuntaEnabled ? "Poista käytöstä" : "Aktivoi";
 }
@@ -2178,25 +2292,33 @@ function renderReceiptRow(tx) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l3-2 3 2 2-2 2 2 3-2 3 2V2H4z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>
         </span>
         <div>
-          <div class="item-title">${tx.merchant}</div>
-          <div class="item-sub">${tx.date}</div>
+          <div class="item-title">${escapeHtml(tx.merchant)}</div>
+          <div class="item-sub">${escapeHtml(tx.date)}</div>
         </div>
       </div>
-      <strong class="nowrap" style="color:${tx.amount_eur > 0 ? "#007429" : "#18241d"}">${fmtEur(tx.amount_eur)}</strong>
+      <strong class="nowrap" style="color:${tx.amount_eur > 0 ? "#007a33" : "#18241d"}">${fmtEur(tx.amount_eur)}</strong>
     </div>`;
 }
 
-function openActivatePrompt() {
-  document.getElementById("activateSuuntaModal").classList.remove("hidden");
+// Suora aktivointi ilman pop-up-ikkunaa
+async function enableSuuntaDirect() {
+  if (!currentCustomerId) return;
+  await fetch(`/api/toggle-suunta/${encodeURIComponent(currentCustomerId)}?enabled=true`, { method: "POST" });
+  await loadState();
 }
 
-function declineSuuntaActivation() {
-  document.getElementById("activateSuuntaModal").classList.add("hidden");
+async function toggleSuuntaMode() {
+  if (!currentCustomerId) return;
+  const nextState = !Boolean(currentSnapshot?.profile?.suunta_enabled);
+  await fetch(`/api/toggle-suunta/${encodeURIComponent(currentCustomerId)}?enabled=${nextState}`, { method: "POST" });
+  await loadState();
 }
 
-function proceedToOnboarding() {
-  document.getElementById("activateSuuntaModal").classList.add("hidden");
-  openOnboarding();
+async function openFullChat() {
+  if (!currentSnapshot?.profile?.suunta_enabled) {
+    await enableSuuntaDirect();
+  }
+  switchTab("chat");
 }
 
 function openOnboarding() {
@@ -2217,7 +2339,7 @@ async function saveOnboarding() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      statement_id: currentStatementId,
+      statement_id: currentCustomerId,
       suunta_enabled: true,
       priorities,
       savings_goal_monthly_eur: savings,
@@ -2228,103 +2350,125 @@ async function saveOnboarding() {
   switchTab("home");
 }
 
-async function toggleSuuntaMode() {
-  const nextState = !Boolean(currentSnapshot?.profile?.suunta_enabled);
-  if (nextState) {
-    openActivatePrompt();
-    return;
-  }
-  await fetch(`/api/toggle-suunta/${currentStatementId}?enabled=false`, { method: "POST" });
-  await loadState();
+function renderActionCard(c) {
+  const encoded = encodeURIComponent(JSON.stringify(c));
+  const weeklyBadge =
+    typeof c.impact_weekly_eur === "number" && c.impact_weekly_eur !== 0
+      ? `<span class="impact-pill">${c.impact_weekly_eur > 0 ? "+" : ""}${c.impact_weekly_eur.toFixed(0)} €/vk</span>`
+      : c.impact_savings_months
+      ? `<span class="impact-pill">${c.impact_savings_months} kk</span>`
+      : "";
+
+  return `
+    <div class="action-card">
+      <div class="action-card-top">
+        <h4>${escapeHtml(c.title)}</h4>
+        ${weeklyBadge}
+      </div>
+      <p>${escapeHtml(c.summary)}</p>
+      <button class="apply-btn" onclick="applyPlanEncoded('${encoded}')">Hyväksy suunnitelma</button>
+    </div>`;
 }
 
-function handleChatIconClick() {
-  if (!currentSnapshot?.profile?.suunta_enabled) {
-    openActivatePrompt();
-  } else {
-    switchTab("chat");
+function renderHistory(history, showLoading = false) {
+  const containers = [
+    document.getElementById("chatMessages"),
+    document.getElementById("homeChatMessages"),
+  ];
+
+  const greeting = `
+    <div class="msg-row assistant">
+      ${BOT_MINI_AVATAR}
+      <div class="msg assistant">Moikka! Olen Suunta, talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>
+    </div>`;
+
+  const messagesHtml = history.length
+    ? history
+        .map((m) => {
+          const isUser = m.role === "user";
+          const cardsHtml = (m.action_cards || []).map(renderActionCard).join("");
+          return `
+            <div class="msg-row ${isUser ? "user" : "assistant"}">
+              ${isUser ? "" : BOT_MINI_AVATAR}
+              <div class="msg ${m.role}">${formatMessageText(m.content)}${cardsHtml}</div>
+            </div>`;
+        })
+        .join("")
+    : greeting;
+
+  const loadingHtml = showLoading
+    ? `<div class="msg-row assistant">
+         ${BOT_MINI_AVATAR}
+         <div class="typing-bubble" role="status" aria-live="polite">
+           <span class="spinner-ring"></span>
+           <span>Suunta laskee ja analysoi</span>
+           <span class="typing-dots"><span></span><span></span><span></span></span>
+         </div>
+       </div>`
+    : "";
+
+  for (const el of containers) {
+    if (!el) continue;
+    el.innerHTML = messagesHtml + loadingHtml;
+    el.scrollTop = el.scrollHeight;
   }
 }
 
-function renderHistory(history) {
-  const el = document.getElementById("chatMessages");
-  if (!history.length) {
-    el.innerHTML = `<div class="msg assistant">Moikka! Olen Suunta, henkilökohtainen talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>`;
-    return;
-  }
-  el.innerHTML = history
-    .map((m) => {
-      const cardsHtml = (m.action_cards || [])
-        .map(
-          (c) => `
-          <div class="action-card">
-            <h4>${c.title}</h4>
-            <p>${c.summary}</p>
-            <button class="apply-btn" onclick='applyPlan(${JSON.stringify(c)})'>Hyväksy suunnitelma</button>
-          </div>`
-        )
-        .join("");
-      return `<div class="msg ${m.role}">${m.content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")}${cardsHtml}</div>`;
-    })
-    .join("");
-  el.scrollTop = el.scrollHeight;
+function setSendingState(loading) {
+  isSending = loading;
+  ["homeChatSubmit", "chatSubmit"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.classList.toggle("loading", loading);
+    btn.innerHTML = loading ? `<span class="btn-spinner"></span>` : SEND_ARROW_SVG;
+  });
 }
 
 async function sendMessage(text) {
-  if (!text.trim()) return;
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ statement_id: currentStatementId, message: text }),
-  });
-  const data = await res.json();
-  renderSnapshot(data.updated_state);
-  await loadState();
+  const cleanText = String(text || "").trim();
+  if (!cleanText || isSending || !currentCustomerId) return;
+
+  const optimisticHistory = [
+    ...currentHistory,
+    { role: "user", content: cleanText, action_cards: [] },
+  ];
+  renderHistory(optimisticHistory, true);
+  setSendingState(true);
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ statement_id: currentCustomerId, message: cleanText }),
+    });
+    if (!res.ok) throw new Error("Palvelinvirhe vastauksessa");
+    const data = await res.json();
+    renderSnapshot(data.updated_state);
+    await loadState();
+  } catch (err) {
+    renderHistory([
+      ...optimisticHistory,
+      { role: "assistant", content: `Yhteysvirhe: ${err.message}`, action_cards: [] },
+    ]);
+  } finally {
+    setSendingState(false);
+  }
 }
 
-async function applyPlan(card) {
+async function applyPlanEncoded(encoded) {
+  const card = JSON.parse(decodeURIComponent(encoded));
   const res = await fetch("/api/apply-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ statement_id: currentStatementId, ...card }),
+    body: JSON.stringify({ statement_id: currentCustomerId, ...card }),
   });
   const data = await res.json();
-  renderSnapshot(data.snapshot);
-  renderHistory(data.history);
+  currentSnapshot = data.snapshot;
+  currentHistory = data.history || [];
+  renderSnapshot(currentSnapshot);
+  renderHistory(currentHistory);
   switchTab("home");
-}
-
-async function uploadStatementFile(file, statusEl) {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(`/api/upload-statement/${currentStatementId}`, { method: "POST", body: formData });
-  if (!res.ok) {
-    const err = await res.json();
-    statusEl.textContent = `Virhe: ${err.detail}`;
-    return false;
-  }
-  statusEl.textContent = "Tiliote ladattu!";
-  return true;
-}
-
-async function uploadStatementFromMe() {
-  const input = document.getElementById("meStatementInput");
-  const statusEl = document.getElementById("meUploadStatus");
-  if (!input.files.length) {
-    statusEl.textContent = "Valitse ensin .xlsx- tai .csv-tiedosto.";
-    return;
-  }
-  statusEl.textContent = "Ladataan...";
-  const ok = await uploadStatementFile(input.files[0], statusEl);
-  if (ok) {
-    await loadState();
-    switchTab("home");
-  }
-}
-
-async function resetDemoSession() {
-  await fetch(`/api/reset/${currentStatementId}`, { method: "POST" });
-  openStatementGate();
 }
 
 function switchTab(tabName) {
@@ -2342,12 +2486,6 @@ function toggleCardDetails() {
   if (currentSnapshot) renderSnapshot(currentSnapshot);
 }
 
-function askPreset(text) {
-  switchTab("chat");
-  sendMessage(text);
-}
-function sendQuickChat(text) { sendMessage(text); }
-
 document.getElementById("chatForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = document.getElementById("chatInput");
@@ -2355,74 +2493,76 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
   input.value = "";
   sendMessage(text);
 });
+
+document.getElementById("homeChatForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("homeChatInput");
+  const text = input.value;
+  input.value = "";
+  sendMessage(text);
+});
+
+document.getElementById("homePreChatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("homePreChatInput");
+  const text = input.value.trim();
+  input.value = "";
+  if (!currentSnapshot?.profile?.suunta_enabled) {
+    await enableSuuntaDirect();
+  }
+  if (text) {
+    await sendMessage(text);
+  }
+});
 === .\frontend\index.html ===
 <!DOCTYPE html>
 <html lang="fi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#007429" />
-  <title>Suunta – Talousvalmentaja</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#007a33" />
+  <title>S-mobiili · Suunta</title>
+  <link rel="stylesheet" href="styles.css?v=3" />
 </head>
 <body>
   <div class="phone-shell">
 
     <!-- ================================================================
-         1. ALOITUSNÄKYMÄ: Vain tiedostomuotoisen tiliotteen tuonti
+         1. ALOITUSNÄKYMÄ: Vain 3 vaihtoehtoa suoraan data/-kansiosta
          ================================================================ -->
-    <div id="statementGate" class="gate-screen">
+    <div id="profileGate" class="gate-screen">
       <div class="gate-header">
-        <div class="gate-logo">S</div>
-        <h1>Lisää tiedostomuotoinen tiliote</h1>
-        <p>Tuo tiliote (.xlsx tai .csv) simuloidaksesi pankkitapahtumien lukemisen. Suunta laskee kolmen korin käyttövarasi ja neuvoo talouspäätöksissä.</p>
+        <div class="gate-logo" aria-label="S-logo">
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 20.5 5.2 H 15.8 C 13.2 5.2 12.3 6.9 12.3 9.8 V 18.2 C 12.3 19.8 11.4 20.4 9.5 20.4 H 6" />
+            <path d="M 7.5 22.8 H 12.2 C 14.8 22.8 15.7 21.1 15.7 18.2 V 9.8 C 15.7 8.2 16.6 7.6 18.5 7.6 H 22" />
+          </svg>
+        </div>
+        <h1>Valitse asiakasprofiili</h1>
+        <p>Tiedot luetaan suoraan datakansion tiliote- ja asiakastiedoista.</p>
       </div>
 
-      <div class="persona-list">
-        <label class="persona-card upload-card">
-          <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
-          </div>
-          <div class="persona-info">
-            <strong>Valitse tiliotetiedosto laitteelta</strong>
-            <span>Tuetut tiedostot: .xlsx, .xls, .csv</span>
-          </div>
-          <input type="file" id="gateStatementInput" accept=".xlsx,.xls,.csv" hidden onchange="uploadStatementFromGate(this)" />
-        </label>
-
-        <a class="persona-card sample-download" href="/api/sample-statement" download="mallitiliote.csv">
-          <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
-          </div>
-          <div class="persona-info">
-            <strong>Lataa mallitiliote (.csv)</strong>
-            <span>Valmis testitiedosto (sample_transactions.csv) puhelimeen</span>
-          </div>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-        </a>
+      <div id="profileList" class="persona-list">
+        <div class="gate-status">Haetaan profiileja...</div>
       </div>
-
-      <p class="gate-hint">
-        Tunnistetut sarakkeet: Kirjauspäivä · Saaja/Maksaja · Summa · Kategoria · Saldo
-      </p>
       <div id="gateStatus" class="gate-status"></div>
     </div>
 
     <!-- ================================================================
-         2. VARSINAINEN KÄYTTÖLIITTYMÄ (S-mobiili + Suunta)
+         2. S-MOBIILI + SUUNTA KÄYTTÖLIITTYMÄ
          ================================================================ -->
     <div id="appShell" class="app-shell hidden">
       <header class="topbar">
-        <button class="icon-btn" onclick="openStatementGate()" title="Vaihda tiliotetiedostoa" aria-label="Vaihda tiliotetiedostoa">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn" onclick="openProfileGate()" title="Vaihda profiilia" aria-label="Vaihda profiilia">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
           </svg>
         </button>
         <div class="topbar-center">
-          <span id="activeStatementBadge" class="statement-label hidden"></span>
+          <span id="activeProfileBadge" class="statement-label hidden"></span>
         </div>
-        <button class="icon-btn" onclick="handleChatIconClick()" title="Suunta Talousvalmentaja" aria-label="Avaa Suunta-valmentaja">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn" onclick="openFullChat()" title="Suunta-talousvalmentaja" aria-label="Avaa Suunta-keskustelu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </button>
@@ -2432,7 +2572,7 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
         <!-- VÄLILEHTI 1: KOTI -->
         <section id="tab-home" class="tab-panel active">
           <div class="hero-section">
-            <!-- Perinteinen bonustalo ennen Suunnan aktivointia -->
+            <!-- A) Perinteinen S-mobiilin bonustalo -->
             <div id="classicHero">
               <div class="bonus-top-title">Seuraavaan tasoon <span id="classicNextTier">58,08 €</span></div>
               <div class="bonus-sub">
@@ -2450,7 +2590,6 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
                 <div class="tier-row tier-mid">
                   <span class="tier-side left">2,0 %</span>
                   <div class="house-card">
-                    <div class="house-roof"></div>
                     <div class="house-body">
                       <span class="house-label">Bonusta tulossa</span>
                       <strong class="house-amount" id="classicBonusAmount">6,84 €</strong>
@@ -2460,13 +2599,13 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
                 </div>
               </div>
 
-              <button class="hero-link" onclick="openActivatePrompt()">
+              <button class="hero-link" onclick="enableSuuntaDirect()">
                 <span>Katso kokonaishyötysi</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
               </button>
             </div>
 
-            <!-- Suunta-etusivu aktivoinnin jälkeen -->
+            <!-- B) Suunta-käyttövaratalo (kun Suunta on aktivoitu) -->
             <div id="suuntaHero" class="hidden">
               <div class="bonus-top-title">Viikon jäljellä oleva käyttövara</div>
               <div class="bonus-sub" id="dailyHint">Turvallinen päivävara ~0,00 € / pv</div>
@@ -2474,7 +2613,6 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
               <div class="bonus-stage">
                 <div class="tier-row tier-mid single-house">
                   <div class="house-card">
-                    <div class="house-roof"></div>
                     <div class="house-body">
                       <span class="house-label">Käytettävissä tällä viikolla</span>
                       <strong class="house-amount" id="weeklySafeAmount">0,00 €</strong>
@@ -2496,61 +2634,117 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
           </div>
 
           <div class="mint-surface">
-            <div id="suuntaBannerCard" class="card suunta-invite-card">
-              <div class="suunta-invite-text">
-                <strong>Ota Suunta-talousvalmentaja käyttöön</strong>
-                <span>Näe viikoittainen käyttövarasi ja suunnittele hankintoja tekoälyn kanssa.</span>
-              </div>
-              <button class="btn-primary btn-sm" onclick="openActivatePrompt()">Aktivoi</button>
-            </div>
-
+            <!-- S-mobiilin pikatoiminnot -->
             <div id="classicQuickActions" class="quick-actions">
-              <button class="qa-item" onclick="openActivatePrompt()">
+              <button class="qa-item" onclick="enableSuuntaDirect()">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 5v14M5 12h14"/></svg>
                 </span>
                 <span>Uusi maksu</span>
               </button>
               <button class="qa-item" onclick="switchTab('etukortti')">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 </span>
                 <span>Edut lähellä</span>
               </button>
               <button class="qa-item" onclick="switchTab('etukortti')">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 </span>
-                <span>Tallennetut edut</span>
+                <span>Tallennetut<br/>edut</span>
               </button>
             </div>
 
             <div id="suuntaQuickActions" class="quick-actions hidden">
-              <button class="qa-item" onclick="askPreset('Haluan ostaa 1 200 € läppärin')">
+              <button class="qa-item" onclick="sendMessage('Haluan ostaa 1 200 € läppärin')">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 5v14M5 12h14"/></svg>
                 </span>
-                <span>Suunnittele ostos</span>
+                <span>Suunnittele<br/>ostos</span>
               </button>
               <button class="qa-item" onclick="switchTab('bank')">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 </span>
-                <span>3 kulutuskoria</span>
+                <span>3 kulutus-<br/>koria</span>
               </button>
-              <button class="qa-item" onclick="askPreset('Tuli yllättävä 350 € autohuolto')">
+              <button class="qa-item" onclick="sendMessage('Tuli yllättävä 350 € autohuolto')">
                 <span class="qa-circle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 </span>
-                <span>Yllättävä meno</span>
+                <span>Yllättävä<br/>meno</span>
               </button>
             </div>
 
+            <!-- SUUNTA-KORTTI ETUSIVULLA ENNEN AKTIVOINTIA (suora käyttöönottokortti + pikakysymys, EI pop-upia) -->
+            <div id="suuntaBannerCard" class="card suunta-starter-card">
+              <div class="suunta-bot-head">
+                <div class="suunta-bot-id">
+                  <span class="suunta-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div class="suunta-bot-name">Suunta · Talousvalmentaja</div>
+                    <div class="suunta-bot-sub">Näe viikon käyttövarasi &amp; kysy tekoälyltä</div>
+                  </div>
+                </div>
+                <button class="btn-primary btn-sm" onclick="enableSuuntaDirect()">Aktivoi</button>
+              </div>
+              <form class="suunta-composer home-pre-composer" id="homePreChatForm">
+                <input type="text" id="homePreChatInput" placeholder="Kysy Suunnalta heti (esim. paljonko voin käyttää?)..." autocomplete="off" />
+                <button type="submit" class="send-circle-btn" aria-label="Lähetä">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+              </form>
+            </div>
+
+            <!-- TYYLIKÄS ETUSIVUN SUUNTA-CHATBOT (kun tekoälypalvelu on otettu käyttöön) -->
+            <div id="homeSuuntaChatCard" class="card suunta-chat-widget hidden">
+              <div class="suunta-bot-head">
+                <div class="suunta-bot-id">
+                  <span class="suunta-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div class="suunta-bot-name">Suunta</div>
+                    <div class="suunta-bot-status"><span class="online-dot"></span> Henkilökohtainen valmentaja</div>
+                  </div>
+                </div>
+                <button class="expand-pill-btn" onclick="switchTab('chat')">Kokoruutu</button>
+              </div>
+
+              <div class="chat-chips widget-chips">
+                <button class="chip" onclick="sendMessage('Paljonko voin käyttää tällä viikolla?')">Viikon käyttövara</button>
+                <button class="chip" onclick="sendMessage('Haluan ostaa 1 200 € läppärin')">1 200 € läppäri</button>
+                <button class="chip" onclick="sendMessage('Millainen kuluttaja olen?')">Kulutusprofiili</button>
+              </div>
+
+              <div class="home-chat-messages" id="homeChatMessages"></div>
+
+              <form class="suunta-composer" id="homeChatForm">
+                <input type="text" id="homeChatInput" placeholder="Kysy tai suunnittele hankinta..." autocomplete="off" />
+                <button type="submit" id="homeChatSubmit" class="send-circle-btn" aria-label="Lähetä">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+              </form>
+            </div>
+
+            <!-- Tilit ja kortit (identtinen S-mobiilin kanssa) -->
             <h2 class="section-title">Tilit ja kortit</h2>
             <div class="card">
               <div class="row-between">
                 <div class="row-left">
-                  <span class="s-doc-icon">S</span>
+                  <span class="s-doc-icon" aria-hidden="true">
+                    <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M 20.5 5.2 H 15.8 C 13.2 5.2 12.3 6.9 12.3 9.8 V 18.2 C 12.3 19.8 11.4 20.4 9.5 20.4 H 6" />
+                      <path d="M 7.5 22.8 H 12.2 C 14.8 22.8 15.7 21.1 15.7 18.2 V 9.8 C 15.7 8.2 16.6 7.6 18.5 7.6 H 22" />
+                    </svg>
+                  </span>
                   <div>
                     <div class="item-title">S-Tili</div>
                   </div>
@@ -2561,8 +2755,11 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
               <div id="cardDetailsBlock">
                 <div class="divider"></div>
                 <div class="row-left">
-                  <div class="visa-mini">
-                    <span>S</span>
+                  <div class="visa-mini" aria-hidden="true">
+                    <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M 20.5 5.2 H 15.8 C 13.2 5.2 12.3 6.9 12.3 9.8 V 18.2 C 12.3 19.8 11.4 20.4 9.5 20.4 H 6" />
+                      <path d="M 7.5 22.8 H 12.2 C 14.8 22.8 15.7 21.1 15.7 18.2 V 9.8 C 15.7 8.2 16.6 7.6 18.5 7.6 H 22" />
+                    </svg>
                     <small>VISA</small>
                   </div>
                   <div>
@@ -2576,6 +2773,7 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
               <button class="center-link" id="toggleDetailsBtn" onclick="toggleCardDetails()">Piilota tiedot</button>
             </div>
 
+            <!-- Kuitit -->
             <div class="row-between section-header">
               <h2 class="section-title">Kuitit</h2>
               <button class="link-btn" onclick="switchTab('bank')">Avaa</button>
@@ -2589,7 +2787,7 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
           <h2 class="section-title">S-Etukortti &amp; Bonus</h2>
           <div class="card">
             <div class="item-title">Kuukauden S-ryhmän ostot</div>
-            <p class="item-sub">Keskittämällä kerrytät Bonusta 0,5 % – 5 %. Suunta voi hyödyntää kuittitietoja suositusten tarkentamiseen.</p>
+            <p class="item-sub">Keskittämällä kerrytät Bonusta 0,5 % – 5 %. Suunta hyödyntää tapahtumadataasi suositusten tarkentamiseen.</p>
           </div>
           <div class="card" id="etukorttiReceipts"></div>
         </section>
@@ -2608,15 +2806,15 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
 
         <!-- VÄLILEHTI 4: MINÄ -->
         <section id="tab-me" class="tab-panel mint-full">
-          <h2 class="section-title">Ladattu tiliote</h2>
+          <h2 class="section-title">Oma profiili</h2>
           <div class="card" id="meProfileCard"></div>
 
           <h2 class="section-title">Suunta-talousvalmentaja</h2>
           <div class="card">
             <div class="row-between">
               <div>
-                <div class="item-title">Henkilökohtainen Suunta-näkymä</div>
-                <div class="item-sub">Näytä etusivulla viikoittainen käyttövara</div>
+                <div class="item-title">Suunta etusivulla</div>
+                <div class="item-sub">Näyttää viikoittaisen käyttövaran ja tekoälychatin etusivulla</div>
               </div>
               <button class="btn-primary btn-sm" id="meToggleSuuntaBtn" onclick="toggleSuuntaMode()">Aktivoi</button>
             </div>
@@ -2624,48 +2822,61 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
             <button class="center-link" onclick="openOnboarding()">Muokkaa omia arvoja &amp; tavoitetta</button>
           </div>
 
-          <h2 class="section-title">Tuo uusi tiliotetiedosto</h2>
-          <div class="card">
-            <p class="item-sub" style="margin-top:0;">Valitse <code>.xlsx</code>-, <code>.xls</code>- tai <code>.csv</code>-tiedosto.</p>
-            <input type="file" id="meStatementInput" accept=".xlsx,.xls,.csv" class="file-input" />
-            <button class="btn-primary full-width" onclick="uploadStatementFromMe()">Lataa tiliote</button>
-            <div id="meUploadStatus" class="item-sub" style="margin-top:8px;"></div>
-          </div>
-
-          <button class="btn-secondary full-width" onclick="resetDemoSession()">Nollaa demo ja valitse uusi tiedosto</button>
+          <button class="btn-secondary full-width" onclick="openProfileGate()">Vaihda profiilia</button>
         </section>
 
-        <!-- SUUNTA-KESKUSTELU -->
+        <!-- KOKO RUUDUN SUUNTA-CHATBOT -->
         <section id="tab-chat" class="tab-panel">
           <div class="chat-header-banner">
             <button class="back-btn" onclick="switchTab('home')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-              <span>Takaisin</span>
+              <span>Koti</span>
             </button>
-            <strong>Suunta</strong>
-            <span class="chat-status">Talousvalmentaja</span>
+            <div class="chat-header-center">
+              <span class="suunta-avatar sm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                </svg>
+              </span>
+              <div>
+                <strong>Suunta</strong>
+                <div class="chat-status"><span class="online-dot"></span> Talousvalmentaja</div>
+              </div>
+            </div>
+            <span class="chat-header-spacer"></span>
           </div>
+
           <div class="chat-chips">
-            <button class="chip" onclick="sendQuickChat('Haluan ostaa 1 200 € läppärin')">1 200 € läppäri</button>
-            <button class="chip" onclick="sendQuickChat('Paljonko voin käyttää tällä viikolla?')">Viikon käyttövara</button>
-            <button class="chip" onclick="sendQuickChat('Paljonko säästän jos vähennän ravintoloita 20 %?')">-20 % ravintolat</button>
-            <button class="chip" onclick="sendQuickChat('Millainen kuluttaja olen?')">Millainen kuluttaja olen?</button>
+            <button class="chip" onclick="sendMessage('Haluan ostaa 1 200 € läppärin')">1 200 € läppäri</button>
+            <button class="chip" onclick="sendMessage('Paljonko voin käyttää tällä viikolla?')">Viikon käyttövara</button>
+            <button class="chip" onclick="sendMessage('Paljonko säästän jos vähennän ravintoloita 20 %?')">-20 % ravintolat</button>
+            <button class="chip" onclick="sendMessage('Millainen kuluttaja olen?')">Millainen kuluttaja olen?</button>
           </div>
+
           <div class="chat-messages" id="chatMessages"></div>
-          <form class="chat-input-bar" id="chatForm">
-            <input type="text" id="chatInput" placeholder="Kysy tai suunnittele hankinta..." autocomplete="off" />
-            <button type="submit">Lähetä</button>
-          </form>
+
+          <div class="full-chat-composer-wrap">
+            <form class="suunta-composer" id="chatForm">
+              <input type="text" id="chatInput" placeholder="Kysy tai suunnittele hankinta..." autocomplete="off" />
+              <button type="submit" id="chatSubmit" class="send-circle-btn" aria-label="Lähetä">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              </button>
+            </form>
+          </div>
         </section>
       </main>
 
+      <!-- Alavalikko: S-mobiilin 4 kuvaketta + identtinen S-logo -->
       <nav class="bottom-nav">
         <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3l9-8z"/></svg>
           <small>Koti</small>
         </button>
         <button class="nav-btn" data-tab="etukortti" onclick="switchTab('etukortti')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4c-3 0-5 1.5-5 4 0 3 6 4 6 8 0 2.5-2 4-5 4"/><path d="M12 4c-3 0-5 1.5-5 4 0 3 6 4 6 8 0 2.5-2 4-5 4"/></svg>
+          <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 20.5 5.2 H 15.8 C 13.2 5.2 12.3 6.9 12.3 9.8 V 18.2 C 12.3 19.8 11.4 20.4 9.5 20.4 H 6" />
+            <path d="M 7.5 22.8 H 12.2 C 14.8 22.8 15.7 21.1 15.7 18.2 V 9.8 C 15.7 8.2 16.6 7.6 18.5 7.6 H 22" />
+          </svg>
           <small>S-Etukortti</small>
         </button>
         <button class="nav-btn" data-tab="bank" onclick="switchTab('bank')">
@@ -2679,20 +2890,7 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
       </nav>
     </div>
 
-    <!-- MODAALI 1: Suunnan aktivointikysymys -->
-    <div id="activateSuuntaModal" class="modal hidden">
-      <div class="modal-card">
-        <div class="modal-house-badge">Suunta</div>
-        <h3>Haluatko ottaa käyttöön henkilökohtaisen Suunta-talousvalmentajan?</h3>
-        <p>Suunta analysoi tiliotteesi kolmeen koriin, laskee viikoittaisen käyttövarasi ja auttaa suunnittelemaan hankintoja arvojesi pohjalta.</p>
-        <div class="modal-actions-col">
-          <button class="btn-primary full-width" onclick="proceedToOnboarding()">Ota Suunta käyttöön</button>
-          <button class="btn-secondary full-width" onclick="declineSuuntaActivation()">Jatka perinteisessä S-mobiilissa</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAALI 2: Käyttöönotto -->
+    <!-- Arvojen & tavoitteen muokkaus (vain Minä-välilehdestä) -->
     <div id="onboardingModal" class="modal hidden">
       <div class="modal-card">
         <h3>Rakennetaan taloussuunnitelmasi</h3>
@@ -2706,21 +2904,21 @@ document.getElementById("chatForm").addEventListener("submit", (e) => {
         <input type="number" id="savingsInput" value="200" min="0" step="25" />
         <div class="modal-actions">
           <button class="btn-secondary" onclick="closeOnboarding()">Peruuta</button>
-          <button class="btn-primary" onclick="saveOnboarding()">Aktivoi Suunta</button>
+          <button class="btn-primary" onclick="saveOnboarding()">Tallenna</button>
         </div>
       </div>
     </div>
 
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
 === .\frontend\styles.css ===
 :root {
-  --s-green: #007429;
-  --s-green-dark: #006623;
-  --s-mint: #ebf5ee;
+  --s-green: #007a33;
+  --s-green-dark: #006626;
+  --s-mint: #eaf4ec;
   --s-text: #18241d;
   --s-muted: #5d6b62;
   --s-card: #ffffff;
@@ -2736,36 +2934,39 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
   overflow: hidden;
 }
 .hidden { display: none !important; }
+.nowrap { white-space: nowrap; }
 
-/* --- 1. Asiakasluokan valintanäkymä --- */
+/* --- 1. Profiilin valintanäkymä --- */
 .gate-screen {
-  flex: 1; background: var(--s-mint); padding: 28px 18px; display: flex; flex-direction: column; overflow-y: auto;
+  flex: 1; background: var(--s-mint); padding: 32px 18px; display: flex; flex-direction: column; overflow-y: auto;
 }
-.gate-header { text-align: center; margin-bottom: 22px; }
+.gate-header { text-align: center; margin-bottom: 24px; }
 .gate-logo {
-  width: 48px; height: 48px; border-radius: 12px; background: var(--s-green); color: #fff;
-  font-size: 26px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
+  width: 52px; height: 52px; border-radius: 14px; background: var(--s-green); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0, 122, 51, 0.22);
 }
+.gate-logo svg { width: 32px; height: 32px; }
 .gate-header h1 { font-size: 20px; color: var(--s-green-dark); margin: 0 0 6px; }
-.gate-header p { font-size: 13px; color: var(--s-muted); margin: 0; line-height: 1.4; }
+.gate-header p { font-size: 13px; color: var(--s-muted); margin: 0; line-height: 1.45; }
 
-.persona-list { display: flex; flex-direction: column; gap: 10px; }
+.persona-list { display: flex; flex-direction: column; gap: 12px; }
 .persona-card {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  background: #fff; border: 1px solid var(--s-border); border-radius: 14px; padding: 14px;
-  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+  background: #fff; border: 1px solid var(--s-border); border-radius: 14px; padding: 15px 14px;
+  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.03); transition: border-color 0.15s, transform 0.1s;
 }
 .persona-card:hover { border-color: var(--s-green); }
-.upload-card { border-style: dashed; border-color: var(--s-green); background: #f7fcf8; }
+.persona-card:active { transform: scale(0.99); }
 .persona-icon {
-  width: 42px; height: 42px; border-radius: 50%; background: var(--s-mint); color: var(--s-green);
+  width: 44px; height: 44px; border-radius: 50%; background: var(--s-mint); color: var(--s-green);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.persona-icon svg { width: 20px; height: 20px; }
-.persona-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.persona-info strong { font-size: 15px; color: var(--s-text); }
+.persona-icon svg { width: 21px; height: 21px; }
+.persona-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.persona-info strong { font-size: 16px; color: var(--s-text); }
 .persona-info span { font-size: 12px; color: var(--s-muted); }
-.chevron { width: 18px; height: 18px; color: var(--s-green); }
+.chevron { width: 18px; height: 18px; color: var(--s-green); flex-shrink: 0; }
 .gate-status { text-align: center; font-size: 13px; color: var(--s-green-dark); margin-top: 12px; }
 
 /* --- 2. S-mobiili kuori --- */
@@ -2776,20 +2977,20 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
   padding: 12px 16px 4px; background: #fff;
 }
 .icon-btn {
-  border: none; background: transparent; color: #2b3830; width: 32px; height: 32px;
+  border: none; background: transparent; color: #26332b; width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 4px;
 }
 .icon-btn svg { width: 22px; height: 22px; }
-.persona-pill { font-size: 11px; color: var(--s-muted); background: #f2f6f3; padding: 3px 10px; border-radius: 12px; }
+.statement-label { font-size: 12px; font-weight: 600; color: var(--s-green-dark); background: var(--s-mint); padding: 4px 12px; border-radius: 12px; }
 
 .content { flex: 1; overflow-y: auto; background: var(--s-mint); }
 .tab-panel { display: none; min-height: 100%; }
 .tab-panel.active { display: block; }
 .mint-full { padding: 16px; }
 
-/* --- S-mobiilin valkoinen yläosa & talokuvio --- */
-.hero-section { background: #fff; text-align: center; padding: 6px 16px 16px; }
-.bonus-top-title { color: var(--s-green-dark); font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+/* --- S-mobiilin valkoinen yläosa & aito Bonustalo --- */
+.hero-section { background: #fff; text-align: center; padding: 8px 16px 16px; }
+.bonus-top-title { color: var(--s-green-dark); font-size: 20px; font-weight: 700; margin-bottom: 4px; }
 .bonus-sub {
   display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--s-green-dark); margin-bottom: 14px;
 }
@@ -2799,7 +3000,7 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 }
 
 .bonus-stage { margin: 0 auto 12px; max-width: 340px; }
-.tier-row { display: flex; align-items: center; justify-content: space-between; color: var(--s-green-dark); font-size: 13px; font-weight: 500; }
+.tier-row { display: flex; align-items: center; justify-content: space-between; color: var(--s-green-dark); font-size: 13px; font-weight: 600; }
 .tier-top { margin-bottom: 8px; padding: 0 4px; }
 .dashed-line { flex: 1; border-bottom: 1.5px dashed #7aa887; margin: 0 10px; }
 
@@ -2808,25 +3009,25 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 .tier-side {
   flex: 1; border-bottom: 1.5px solid #96baa0; padding-bottom: 4px; font-size: 13px;
 }
-.tier-side.left { text-align: left; margin-right: 8px; }
-.tier-side.right { text-align: right; margin-left: 8px; }
+.tier-side.left { text-align: left; }
+.tier-side.right { text-align: right; }
 
-.house-card { width: 176px; flex-shrink: 0; }
-.house-roof {
-  width: 0; height: 0; margin: 0 auto;
-  border-left: 88px solid transparent; border-right: 88px solid transparent;
-  border-bottom: 24px solid var(--s-green);
-}
+/* S-mobiilin yhtenäinen vihreä talo ilman rakoa katon ja rungon välissä */
+.house-card { width: 184px; flex-shrink: 0; }
 .house-body {
-  background: var(--s-green); color: #fff; padding: 8px 10px 16px;
-  border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
+  background: var(--s-green);
+  color: #fff;
+  padding: 28px 10px 18px;
+  clip-path: polygon(50% 0%, 100% 17%, 100% 100%, 0% 100%, 0% 17%);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 .house-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
 .house-amount { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
 
 .hero-link {
   border: none; background: transparent; color: var(--s-green-dark); font-weight: 700; font-size: 15px;
-  display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 4px 0 10px;
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 6px 0 10px;
 }
 .hero-link svg { width: 18px; height: 18px; }
 
@@ -2836,24 +3037,36 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 
 /* --- Minttupinta & Pikatoiminnot --- */
 .mint-surface { padding: 18px 16px 24px; }
-.quick-actions { display: flex; justify-content: space-around; margin-bottom: 22px; }
+.quick-actions { display: flex; justify-content: space-around; margin-bottom: 20px; }
 .qa-item {
   border: none; background: transparent; display: flex; flex-direction: column; align-items: center;
-  gap: 8px; cursor: pointer; font-size: 13px; color: var(--s-text); width: 96px; text-align: center;
+  gap: 8px; cursor: pointer; font-size: 13px; color: var(--s-text); width: 100px; text-align: center; line-height: 1.25;
 }
 .qa-circle {
-  width: 54px; height: 54px; border-radius: 50%; background: var(--s-green); color: #fff;
+  width: 56px; height: 56px; border-radius: 50%; background: var(--s-green); color: #fff;
   display: flex; align-items: center; justify-content: center;
 }
 .qa-circle svg { width: 22px; height: 22px; }
 
-.sai-invite-card {
+.suunta-invite-card {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   border-left: 4px solid var(--s-green);
 }
-.sai-invite-text { display: flex; flex-direction: column; gap: 2px; }
-.sai-invite-text strong { font-size: 13px; color: var(--s-green-dark); }
-.sai-invite-text span { font-size: 12px; color: var(--s-muted); }
+.suunta-invite-text { display: flex; flex-direction: column; gap: 2px; }
+.suunta-invite-text strong { font-size: 13px; color: var(--s-green-dark); }
+.suunta-invite-text span { font-size: 12px; color: var(--s-muted); }
+
+/* --- Etusivun inline-chat --- */
+.home-chat-card { border: 1px solid #c7e0ce; padding: 14px; }
+.home-chat-header { margin-bottom: 8px; }
+.home-chat-title { font-size: 15px; color: var(--s-green-dark); }
+.btn-xs { font-size: 13px !important; }
+.home-chips { padding: 4px 0 8px; background: transparent; border-bottom: none; }
+.home-chat-messages {
+  max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+  padding: 6px 0 10px;
+}
+.home-chat-form { padding: 8px 0 0; border-top: 1px solid #edf2ee; }
 
 .section-title { color: var(--s-green-dark); font-size: 19px; font-weight: 700; margin: 10px 0 10px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; }
@@ -2864,19 +3077,24 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 .row-left { display: flex; align-items: center; gap: 12px; }
 .divider { height: 1px; background: #edf2ee; margin: 13px 0; }
 
+/* Aito S-Tili ja Visa-ikonit */
 .s-doc-icon {
-  width: 24px; height: 30px; border: 2px solid var(--s-green); border-radius: 4px;
-  color: var(--s-green); font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 28px; border: 1.9px solid var(--s-green); border-radius: 4px;
+  color: var(--s-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
+.s-doc-icon svg { width: 16px; height: 16px; }
+
 .visa-mini {
   width: 24px; height: 34px; background: var(--s-green); color: #fff; border-radius: 4px;
-  display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 3px 0;
-  font-weight: 800; font-size: 11px;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 2px 3px;
+  font-weight: 800; flex-shrink: 0;
 }
+.visa-mini svg { width: 14px; height: 14px; }
 .visa-mini small { font-size: 6px; letter-spacing: 0.3px; }
+
 .receipt-icon {
   width: 22px; height: 26px; border: 1.8px solid var(--s-green); border-radius: 3px; color: var(--s-green);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .receipt-icon svg { width: 14px; height: 14px; }
 
@@ -2885,7 +3103,7 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 .amount-green { color: var(--s-green); font-size: 18px; font-weight: 700; }
 .center-link { width: 100%; border: none; background: transparent; color: var(--s-green-dark); font-weight: 600; font-size: 15px; cursor: pointer; padding: 2px 0; }
 
-/* --- Chat --- */
+/* --- Chat & Tyylikäs latausindikaattori --- */
 #tab-chat.active { display: flex; flex-direction: column; height: 100%; background: #f6faf7; }
 .chat-header-banner {
   padding: 10px 14px; background: #fff; border-bottom: 1px solid var(--s-border);
@@ -2898,9 +3116,34 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 .chat-chips { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #fff; border-bottom: 1px solid #eef3ef; }
 .chip { white-space: nowrap; border: 1px solid var(--s-border); background: var(--s-mint); color: var(--s-green-dark); border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
 .msg { max-width: 88%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-line; }
 .msg.user { align-self: flex-end; background: var(--s-green); color: #fff; border-bottom-right-radius: 4px; }
 .msg.assistant { align-self: flex-start; background: #fff; color: var(--s-text); border: 1px solid var(--s-border); border-bottom-left-radius: 4px; }
+
+/* Latauskupla */
+.typing-bubble {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #fff; border: 1px solid var(--s-border); border-radius: 14px; border-bottom-left-radius: 4px;
+  padding: 10px 14px; align-self: flex-start; color: var(--s-green-dark); font-size: 13px; font-weight: 500;
+}
+.spinner-ring {
+  width: 16px; height: 16px; border: 2.2px solid #cfe4d5; border-top-color: var(--s-green);
+  border-radius: 50%; animation: suunta-spin 0.8s linear infinite; flex-shrink: 0;
+}
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--s-green);
+  animation: suunta-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes suunta-spin { to { transform: rotate(360deg); } }
+@keyframes suunta-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.45; }
+  40% { transform: scale(1); opacity: 1; }
+}
 
 .action-card { background: #f2faf4; border: 1px solid #b8dec2; border-radius: 12px; padding: 10px; margin-top: 8px; }
 .action-card h4 { margin: 0 0 4px; color: var(--s-green-dark); font-size: 14px; }
@@ -2908,36 +3151,32 @@ body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; m
 .apply-btn { background: var(--s-green); color: #fff; border: none; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
 
 .chat-input-bar { display: flex; gap: 8px; padding: 10px 12px; background: #fff; border-top: 1px solid var(--s-border); }
-.chat-input-bar input { flex: 1; border: 1px solid var(--s-border); border-radius: 20px; padding: 10px 14px; font-size: 14px; outline: none; }
+.chat-input-bar input { flex: 1; border: 1px solid var(--s-border); border-radius: 20px; padding: 9px 14px; font-size: 14px; outline: none; }
+.chat-input-bar input:focus { border-color: var(--s-green); }
 .chat-input-bar button { background: var(--s-green); color: #fff; border: none; border-radius: 20px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+.chat-input-bar button:disabled { opacity: 0.6; cursor: wait; }
 
 /* --- Alavalikko (4 välilehteä) --- */
 .bottom-nav { display: flex; justify-content: space-around; background: #fff; border-top: 1px solid #e7ede9; padding: 8px 0 10px; }
 .nav-btn {
   border: none; background: transparent; display: flex; flex-direction: column; align-items: center;
-  color: #5c6861; cursor: pointer; gap: 3px; width: 72px;
+  color: #5c6861; cursor: pointer; gap: 3px; width: 76px;
 }
 .nav-btn svg { width: 22px; height: 22px; }
 .nav-btn.active { color: var(--s-green); font-weight: 600; }
 .nav-btn small { font-size: 11px; }
 
-/* --- Modaalit --- */
+/* --- Modaali --- */
 .modal { position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
 .modal-card { background: #fff; border-radius: 16px; padding: 20px; width: 100%; }
 .modal-card h3 { margin: 0 0 8px; color: var(--s-green-dark); font-size: 18px; }
 .modal-card p { font-size: 13px; color: var(--s-muted); line-height: 1.45; margin: 0 0 14px; }
-.modal-house-badge {
-  display: inline-block; background: var(--s-mint); color: var(--s-green); font-weight: 800;
-  font-size: 12px; padding: 4px 10px; border-radius: 12px; margin-bottom: 10px;
-}
 .check-group { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; font-size: 14px; }
 .field-label { display: block; font-size: 13px; color: var(--s-muted); margin-bottom: 4px; }
 #savingsInput { width: 100%; padding: 9px; border: 1px solid var(--s-border); border-radius: 8px; margin-bottom: 14px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.modal-actions-col { display: flex; flex-direction: column; gap: 8px; }
 
 .btn-primary { background: var(--s-green); color: #fff; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
 .btn-secondary { background: #eef3ef; color: var(--s-text); border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
 .btn-sm { padding: 7px 12px; font-size: 12px; }
 .full-width { width: 100%; }
-.file-input { width: 100%; margin-bottom: 10px; font-size: 13px; }

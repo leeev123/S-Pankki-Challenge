@@ -1,9 +1,10 @@
 """
 Työkalut (Tools), joita tekoälyagentti kutsuu.
-Kaikki matemaattinen laskenta tehdään engine.py-laskentaohjelmassa.
+Kaikki matemaattinen laskenta tehdään engine.py- ja suunta_engine.py-moduuleissa.
 """
 
 from finance.engine import (
+    find_savings_opportunities_for_statement,
     get_financial_snapshot,
     simulate_category_cut,
     simulate_purchase,
@@ -13,6 +14,10 @@ from finance.engine import (
 
 def tool_get_financial_summary(statement_id: str) -> dict:
     return get_financial_snapshot(statement_id)
+
+
+def tool_find_savings_opportunities(statement_id: str) -> dict:
+    return find_savings_opportunities_for_statement(statement_id)
 
 
 def tool_simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> dict:

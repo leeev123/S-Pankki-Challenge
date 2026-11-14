@@ -1,265 +1,456 @@
 :root {
-  --s-green: #007a33;
-  --s-green-dark: #006626;
+  --s-green: #00783e;
+  --s-green-dark: #005c2f;
   --s-mint: #eaf4ec;
-  --s-text: #18241d;
-  --s-muted: #5d6b62;
+  --s-mint-soft: #f4f8f5;
+  --s-text: #161f1a;
+  --s-muted: #5f6e65;
   --s-card: #ffffff;
-  --s-border: #dce8df;
+  --s-border: #dce7df;
 }
 
-* { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-body { margin: 0; background: #dfe7e1; display: flex; justify-content: center; min-height: 100vh; }
-
-.phone-shell {
-  width: 100%; max-width: 430px; height: 100dvh; background: #fff;
-  display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.14);
-  overflow: hidden;
+* {
+  box-sizing: border-box;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
+
+body {
+  margin: 0;
+  background: #dde5df;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100dvh;
+  color: var(--s-text);
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
 .hidden { display: none !important; }
 .nowrap { white-space: nowrap; }
 
-/* --- 1. Profiilin valintanäkymä --- */
-.gate-screen {
-  flex: 1; background: var(--s-mint); padding: 32px 18px; display: flex; flex-direction: column; overflow-y: auto;
+/* Puhelinrunko tietokoneella, koko ruutu oikealla puhelimella */
+.phone-shell {
+  width: 100%;
+  max-width: 416px;
+  height: min(868px, calc(100dvh - 24px));
+  background: #fff;
+  border-radius: 30px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(10, 32, 20, 0.16), 0 0 0 1px rgba(0, 40, 20, 0.06);
+  overflow: hidden;
 }
-.gate-header { text-align: center; margin-bottom: 24px; }
+
+@media (max-width: 520px) {
+  body { background: #fff; align-items: stretch; }
+  .phone-shell {
+    max-width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* --- 1. Profiilin valinta --- */
+.gate-screen {
+  flex: 1;
+  background: linear-gradient(180deg, #ffffff 0%, var(--s-mint) 100%);
+  padding: 40px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.gate-header { text-align: center; margin-bottom: 26px; }
 .gate-logo {
-  width: 52px; height: 52px; border-radius: 14px; background: var(--s-green); color: #fff;
-  display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(0, 122, 51, 0.22);
+  width: 54px; height: 54px; border-radius: 15px;
+  background: var(--s-green); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+  box-shadow: 0 8px 20px rgba(0, 120, 62, 0.22);
 }
 .gate-logo svg { width: 32px; height: 32px; }
-.gate-header h1 { font-size: 20px; color: var(--s-green-dark); margin: 0 0 6px; }
+.gate-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--s-green); margin-bottom: 6px;
+}
+.gate-header h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--s-text); }
 .gate-header p { font-size: 13px; color: var(--s-muted); margin: 0; line-height: 1.45; }
 
-.persona-list { display: flex; flex-direction: column; gap: 12px; }
+.persona-list { display: flex; flex-direction: column; gap: 10px; }
 .persona-card {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  background: #fff; border: 1px solid var(--s-border); border-radius: 14px; padding: 15px 14px;
-  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.03); transition: border-color 0.15s, transform 0.1s;
+  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+  background: #fff; border: 1px solid var(--s-border); border-radius: 16px; padding: 15px;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0, 30, 15, 0.03);
+  transition: border-color 0.15s ease, transform 0.1s ease;
 }
 .persona-card:hover { border-color: var(--s-green); }
 .persona-card:active { transform: scale(0.99); }
 .persona-icon {
-  width: 44px; height: 44px; border-radius: 50%; background: var(--s-mint); color: var(--s-green);
+  width: 42px; height: 42px; border-radius: 12px; background: var(--s-mint); color: var(--s-green);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.persona-icon svg { width: 21px; height: 21px; }
+.persona-icon svg { width: 20px; height: 20px; }
 .persona-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.persona-info strong { font-size: 16px; color: var(--s-text); }
+.persona-info strong { font-size: 15px; font-weight: 600; color: var(--s-text); }
 .persona-info span { font-size: 12px; color: var(--s-muted); }
-.chevron { width: 18px; height: 18px; color: var(--s-green); flex-shrink: 0; }
-.gate-status { text-align: center; font-size: 13px; color: var(--s-green-dark); margin-top: 12px; }
+.chevron { width: 18px; height: 18px; color: var(--s-muted); flex-shrink: 0; }
+.gate-status { text-align: center; font-size: 13px; color: var(--s-muted); margin-top: 12px; }
 
-/* --- 2. S-mobiili kuori --- */
+/* --- 2. Yläpalkki & runko --- */
 .app-shell { display: flex; flex-direction: column; height: 100%; }
-
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 16px 4px; background: #fff;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 6px;
+  background: #fff;
 }
 .icon-btn {
-  border: none; background: transparent; color: #26332b; width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 4px;
+  border: none; background: transparent; color: #243029;
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-.icon-btn svg { width: 22px; height: 22px; }
-.statement-label { font-size: 12px; font-weight: 600; color: var(--s-green-dark); background: var(--s-mint); padding: 4px 12px; border-radius: 12px; }
+.icon-btn:hover { background: var(--s-mint-soft); }
+.icon-btn svg { width: 21px; height: 21px; }
+
+.profile-pill {
+  border: 1px solid var(--s-border); background: var(--s-mint-soft); color: var(--s-green-dark);
+  font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+}
 
 .content { flex: 1; overflow-y: auto; background: var(--s-mint); }
 .tab-panel { display: none; min-height: 100%; }
 .tab-panel.active { display: block; }
-.mint-full { padding: 16px; }
+.mint-full { padding: 14px 16px 24px; }
 
-/* --- S-mobiilin valkoinen yläosa & aito Bonustalo --- */
-.hero-section { background: #fff; text-align: center; padding: 8px 16px 16px; }
-.bonus-top-title { color: var(--s-green-dark); font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+/* --- S-mobiilin Bonus- & Käyttövaranäkymä --- */
+.hero-section { background: #fff; text-align: center; padding: 6px 16px 14px; }
+.bonus-top-title { color: var(--s-green); font-size: 19px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 4px; }
 .bonus-sub {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--s-green-dark); margin-bottom: 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--s-green-dark); margin-bottom: 14px;
 }
 .info-circle {
   width: 15px; height: 15px; border-radius: 50%; background: var(--s-green); color: #fff;
   font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
 }
 
-.bonus-stage { margin: 0 auto 12px; max-width: 340px; }
-.tier-row { display: flex; align-items: center; justify-content: space-between; color: var(--s-green-dark); font-size: 13px; font-weight: 600; }
-.tier-top { margin-bottom: 8px; padding: 0 4px; }
-.dashed-line { flex: 1; border-bottom: 1.5px dashed #7aa887; margin: 0 10px; }
-
+.bonus-stage { margin: 0 auto 10px; max-width: 336px; }
+.tier-row { display: flex; align-items: center; justify-content: space-between; color: var(--s-green); font-size: 13px; font-weight: 600; }
+.tier-top { margin-bottom: 8px; padding: 0 2px; }
+.dashed-line { flex: 1; border-bottom: 1.5px dashed #77a889; margin: 0 10px; }
 .tier-mid { position: relative; justify-content: center; }
-.tier-mid.single-house { justify-content: center; }
-.tier-side {
-  flex: 1; border-bottom: 1.5px solid #96baa0; padding-bottom: 4px; font-size: 13px;
-}
+.tier-side { flex: 1; border-bottom: 1.5px solid #8eb89d; padding-bottom: 4px; font-size: 13px; }
 .tier-side.left { text-align: left; }
 .tier-side.right { text-align: right; }
 
-/* S-mobiilin yhtenäinen vihreä talo ilman rakoa katon ja rungon välissä */
-.house-card { width: 184px; flex-shrink: 0; }
+.house-card { width: 186px; flex-shrink: 0; }
 .house-body {
-  background: var(--s-green);
-  color: #fff;
-  padding: 28px 10px 18px;
+  background: var(--s-green); color: #fff; padding: 26px 12px 17px;
   clip-path: polygon(50% 0%, 100% 17%, 100% 100%, 0% 100%, 0% 17%);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
 }
-.house-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-.house-amount { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+.house-label { display: block; font-size: 12.5px; font-weight: 500; opacity: 0.94; margin-bottom: 3px; }
+.house-amount { font-size: 31px; font-weight: 700; letter-spacing: -0.03em; }
 
 .hero-link {
-  border: none; background: transparent; color: var(--s-green-dark); font-weight: 700; font-size: 15px;
-  display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 6px 0 10px;
+  border: none; background: transparent; color: var(--s-green); font-weight: 600; font-size: 14.5px;
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 4px 0 8px;
 }
-.hero-link svg { width: 18px; height: 18px; }
+.hero-link svg { width: 17px; height: 17px; }
 
-.dots { display: flex; justify-content: center; gap: 6px; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: #c5d3c9; }
-.dot.active { background: #6b7b70; }
+.dots { display: flex; justify-content: center; gap: 7px; }
+.dot {
+  width: 8px; height: 8px; padding: 0; border: none; border-radius: 50%;
+  background: #cbd6ce; cursor: pointer;
+}
+.dot.active { background: #68776d; }
 
-/* --- Minttupinta & Pikatoiminnot --- */
+/* --- Minttupinta & pyöreät pikatoiminnot --- */
 .mint-surface { padding: 18px 16px 24px; }
-.quick-actions { display: flex; justify-content: space-around; margin-bottom: 20px; }
+.quick-actions { display: flex; justify-content: space-around; margin-bottom: 18px; }
 .qa-item {
   border: none; background: transparent; display: flex; flex-direction: column; align-items: center;
-  gap: 8px; cursor: pointer; font-size: 13px; color: var(--s-text); width: 100px; text-align: center; line-height: 1.25;
+  gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--s-text); width: 98px; text-align: center; line-height: 1.25;
 }
 .qa-circle {
-  width: 56px; height: 56px; border-radius: 50%; background: var(--s-green); color: #fff;
+  width: 54px; height: 54px; border-radius: 50%; background: var(--s-green); color: #fff;
   display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 120, 62, 0.16);
 }
 .qa-circle svg { width: 22px; height: 22px; }
 
-.suunta-invite-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  border-left: 4px solid var(--s-green);
+/* --- Yleiset kortit & S-mobiilin ikonit --- */
+.section-title { color: var(--s-green); font-size: 18px; font-weight: 700; letter-spacing: -0.015em; margin: 8px 0 10px; }
+.section-header { margin-top: 4px; }
+.link-btn { border: none; background: transparent; color: var(--s-green); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+
+.card {
+  background: var(--s-card); border-radius: 15px; padding: 15px;
+  box-shadow: 0 2px 8px rgba(0, 28, 14, 0.04); margin-bottom: 14px;
 }
-.suunta-invite-text { display: flex; flex-direction: column; gap: 2px; }
-.suunta-invite-text strong { font-size: 13px; color: var(--s-green-dark); }
-.suunta-invite-text span { font-size: 12px; color: var(--s-muted); }
-
-/* --- Etusivun inline-chat --- */
-.home-chat-card { border: 1px solid #c7e0ce; padding: 14px; }
-.home-chat-header { margin-bottom: 8px; }
-.home-chat-title { font-size: 15px; color: var(--s-green-dark); }
-.btn-xs { font-size: 13px !important; }
-.home-chips { padding: 4px 0 8px; background: transparent; border-bottom: none; }
-.home-chat-messages {
-  max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
-  padding: 6px 0 10px;
-}
-.home-chat-form { padding: 8px 0 0; border-top: 1px solid #edf2ee; }
-
-.section-title { color: var(--s-green-dark); font-size: 19px; font-weight: 700; margin: 10px 0 10px; }
-.section-header { display: flex; justify-content: space-between; align-items: center; }
-.link-btn { border: none; background: transparent; color: var(--s-green-dark); font-weight: 600; font-size: 15px; cursor: pointer; }
-
-.card { background: var(--s-card); border-radius: 14px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 14px; }
-.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .row-left { display: flex; align-items: center; gap: 12px; }
-.divider { height: 1px; background: #edf2ee; margin: 13px 0; }
+.divider { height: 1px; background: #ebf0ec; margin: 12px 0; }
 
-/* Aito S-Tili ja Visa-ikonit */
-.s-doc-icon {
-  width: 24px; height: 28px; border: 1.9px solid var(--s-green); border-radius: 4px;
+.s-passbook-icon {
+  width: 26px; height: 30px; border: 1.8px solid var(--s-green); border-radius: 4px;
   color: var(--s-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.s-doc-icon svg { width: 16px; height: 16px; }
+.s-passbook-icon svg { width: 17px; height: 17px; }
 
-.visa-mini {
-  width: 24px; height: 34px; background: var(--s-green); color: #fff; border-radius: 4px;
-  display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 2px 3px;
-  font-weight: 800; flex-shrink: 0;
+.s-visa-icon {
+  width: 26px; height: 35px; background: var(--s-green); color: #fff; border-radius: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: 4px 2px 3px; flex-shrink: 0;
 }
-.visa-mini svg { width: 14px; height: 14px; }
-.visa-mini small { font-size: 6px; letter-spacing: 0.3px; }
+.s-visa-icon svg { width: 15px; height: 15px; }
+.s-visa-icon small { font-size: 6px; font-weight: 700; letter-spacing: 0.4px; }
 
 .receipt-icon {
-  width: 22px; height: 26px; border: 1.8px solid var(--s-green); border-radius: 3px; color: var(--s-green);
+  width: 24px; height: 28px; border: 1.7px solid var(--s-green); border-radius: 4px; color: var(--s-green);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .receipt-icon svg { width: 14px; height: 14px; }
 
-.item-title { font-weight: 500; font-size: 15px; color: var(--s-text); }
-.item-sub { font-size: 13px; color: var(--s-muted); margin-top: 2px; }
+.item-title { font-weight: 500; font-size: 14.5px; color: var(--s-text); }
+.item-sub { font-size: 12.5px; color: var(--s-muted); margin-top: 2px; }
 .amount-green { color: var(--s-green); font-size: 18px; font-weight: 700; }
-.center-link { width: 100%; border: none; background: transparent; color: var(--s-green-dark); font-weight: 600; font-size: 15px; cursor: pointer; padding: 2px 0; }
-
-/* --- Chat & Tyylikäs latausindikaattori --- */
-#tab-chat.active { display: flex; flex-direction: column; height: 100%; background: #f6faf7; }
-.chat-header-banner {
-  padding: 10px 14px; background: #fff; border-bottom: 1px solid var(--s-border);
-  display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--s-green-dark);
+.center-link {
+  width: 100%; border: none; background: transparent; color: var(--s-green);
+  font-weight: 600; font-size: 14.5px; cursor: pointer; padding: 2px 0;
 }
-.back-btn { border: none; background: transparent; color: var(--s-green-dark); display: inline-flex; align-items: center; gap: 2px; cursor: pointer; font-weight: 600; padding: 0; }
+
+/* --- SUUNTA: Hillitty, tyylikäs ja minimalistinen ilme (EI nuolilogoa) --- */
+.suunta-card {
+  border: 1px solid #d4e4d9;
+  padding: 15px;
+}
+.suunta-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 10px;
+}
+.suunta-brand {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.suunta-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #95b5a1; flex-shrink: 0;
+}
+.suunta-status-dot.active {
+  background: var(--s-green);
+  box-shadow: 0 0 0 3px rgba(0, 120, 62, 0.15);
+}
+.suunta-wordmark {
+  font-size: 16px; font-weight: 700; letter-spacing: -0.025em; color: var(--s-text);
+}
+.suunta-tag {
+  font-size: 11.5px; font-weight: 500; color: var(--s-muted);
+  background: var(--s-mint-soft); padding: 2px 8px; border-radius: 999px;
+}
+.suunta-lead {
+  font-size: 13px; line-height: 1.45; color: var(--s-muted); margin: 0 0 12px;
+}
+.btn-subtle {
+  border: 1px solid var(--s-border); background: #fff; color: var(--s-green);
+  font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+}
+.btn-subtle:hover { background: var(--s-mint-soft); border-color: var(--s-green); }
+
+/* Keskustelun pikavalintapillerit */
+.suunta-chips {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px;
+  scrollbar-width: none;
+}
+.suunta-chips::-webkit-scrollbar { display: none; }
+.full-chips {
+  padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2ee;
+}
+.chip {
+  white-space: nowrap; border: 1px solid #d5e3d9; background: var(--s-mint-soft);
+  color: var(--s-green-dark); border-radius: 999px; padding: 6px 12px;
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+}
+.chip:hover { background: #e0efe4; }
+
+/* Keskusteluviestit */
+.home-chat-stream {
+  max-height: 230px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 0 12px;
+}
+#tab-chat.active {
+  display: flex; flex-direction: column; height: 100%; background: #f6f9f7;
+}
+.suunta-full-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: #fff; border-bottom: 1px solid #e6eee8;
+}
+.suunta-full-title { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.suunta-full-sub { font-size: 11.5px; color: var(--s-muted); font-variant-numeric: tabular-nums; }
+.back-btn {
+  border: none; background: transparent; color: var(--s-green);
+  display: inline-flex; align-items: center; gap: 2px; font-size: 14px; font-weight: 600;
+  cursor: pointer; padding: 4px 0;
+}
 .back-btn svg { width: 18px; height: 18px; }
-.chat-status { font-size: 12px; color: var(--s-muted); }
 
-.chat-chips { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #fff; border-bottom: 1px solid #eef3ef; }
-.chip { white-space: nowrap; border: 1px solid var(--s-border); background: var(--s-mint); color: var(--s-green-dark); border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-.chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
 
-.msg { max-width: 88%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-line; }
-.msg.user { align-self: flex-end; background: var(--s-green); color: #fff; border-bottom-right-radius: 4px; }
-.msg.assistant { align-self: flex-start; background: #fff; color: var(--s-text); border: 1px solid var(--s-border); border-bottom-left-radius: 4px; }
+.msg-group { display: flex; flex-direction: column; max-width: 88%; }
+.msg-group.user { align-self: flex-end; align-items: flex-end; }
+.msg-group.assistant { align-self: flex-start; align-items: flex-start; }
 
-/* Latauskupla */
+.msg-sender {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--s-muted); margin: 0 0 4px 2px;
+}
+
+.msg {
+  padding: 11px 14px; border-radius: 16px; font-size: 13.5px; line-height: 1.5;
+  white-space: pre-line;
+}
+.msg.user {
+  background: var(--s-green); color: #fff; border-bottom-right-radius: 4px;
+}
+.msg.assistant {
+  background: #ffffff; color: var(--s-text);
+  border: 1px solid #dfe9e2; border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 24, 12, 0.03);
+}
+
+/* Toimintokortit (Action Cards) */
+.action-cards-stack {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px;
+}
+.action-card {
+  background: #ffffff; border: 1px solid #cde0d3; border-radius: 14px;
+  padding: 12px 13px; box-shadow: 0 2px 6px rgba(0, 30, 15, 0.04);
+}
+.action-card-top {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px;
+}
+.action-card h4 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--s-text); }
+.impact-pill {
+  font-size: 11px; font-weight: 600; color: var(--s-green-dark);
+  background: var(--s-mint); padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.action-card p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.42; color: var(--s-muted); }
+.apply-btn {
+  width: 100%; background: var(--s-green); color: #fff; border: none;
+  border-radius: 9px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.apply-btn:hover { background: var(--s-green-dark); }
+
+/* Rauhallinen kirjoitusindikaattori */
 .typing-bubble {
-  display: inline-flex; align-items: center; gap: 10px;
-  background: #fff; border: 1px solid var(--s-border); border-radius: 14px; border-bottom-left-radius: 4px;
-  padding: 10px 14px; align-self: flex-start; color: var(--s-green-dark); font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid #dfe9e2; border-radius: 16px; border-bottom-left-radius: 4px;
+  padding: 10px 14px; font-size: 12.5px; color: var(--s-muted);
 }
-.spinner-ring {
-  width: 16px; height: 16px; border: 2.2px solid #cfe4d5; border-top-color: var(--s-green);
-  border-radius: 50%; animation: suunta-spin 0.8s linear infinite; flex-shrink: 0;
-}
-.typing-dots { display: inline-flex; gap: 4px; align-items: center; }
+.typing-dots { display: inline-flex; gap: 4px; }
 .typing-dots span {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--s-green);
-  animation: suunta-bounce 1.2s infinite ease-in-out;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--s-green);
+  animation: pulse-dot 1.2s infinite ease-in-out;
 }
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes suunta-spin { to { transform: rotate(360deg); } }
-@keyframes suunta-bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.45; }
-  40% { transform: scale(1); opacity: 1; }
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 
-.action-card { background: #f2faf4; border: 1px solid #b8dec2; border-radius: 12px; padding: 10px; margin-top: 8px; }
-.action-card h4 { margin: 0 0 4px; color: var(--s-green-dark); font-size: 14px; }
-.action-card p { margin: 0 0 8px; font-size: 12px; color: var(--s-muted); }
-.apply-btn { background: var(--s-green); color: #fff; border: none; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+/* Viestikenttä (Composer) */
+.full-composer-bar {
+  padding: 10px 14px; background: #fff; border-top: 1px solid #e6eee8;
+}
+.suunta-composer {
+  display: flex; align-items: center; gap: 6px;
+  background: #f2f6f3; border: 1px solid #d9e5dc; border-radius: 999px;
+  padding: 4px 4px 4px 14px; transition: border-color 0.15s, background 0.15s;
+}
+.suunta-composer:focus-within {
+  background: #fff; border-color: var(--s-green);
+}
+.suunta-composer input {
+  flex: 1; min-width: 0; border: none; background: transparent;
+  font-size: 13.5px; color: var(--s-text); outline: none; padding: 6px 0;
+}
+.composer-send-btn {
+  border: none; background: var(--s-green); color: #fff;
+  font-size: 12.5px; font-weight: 600; border-radius: 999px;
+  padding: 8px 14px; cursor: pointer; flex-shrink: 0;
+}
+.composer-send-btn:disabled { opacity: 0.55; cursor: wait; }
 
-.chat-input-bar { display: flex; gap: 8px; padding: 10px 12px; background: #fff; border-top: 1px solid var(--s-border); }
-.chat-input-bar input { flex: 1; border: 1px solid var(--s-border); border-radius: 20px; padding: 9px 14px; font-size: 14px; outline: none; }
-.chat-input-bar input:focus { border-color: var(--s-green); }
-.chat-input-bar button { background: var(--s-green); color: #fff; border: none; border-radius: 20px; padding: 0 16px; font-weight: 600; cursor: pointer; }
-.chat-input-bar button:disabled { opacity: 0.6; cursor: wait; }
+/* --- S-Etukortti digitaalinen kortti --- */
+.etukortti-visual {
+  background: linear-gradient(135deg, #008545 0%, #005e30 100%);
+  color: #fff; border-radius: 16px; padding: 18px; margin-bottom: 16px;
+  display: flex; flex-direction: column; justify-content: space-between; min-height: 148px;
+  box-shadow: 0 8px 20px rgba(0, 100, 50, 0.2);
+}
+.etukortti-top { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+.etukortti-mark { width: 28px; height: 28px; }
+.etukortti-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+.etukortti-caption { font-size: 11.5px; opacity: 0.85; }
+.etukortti-bottom strong { font-size: 24px; font-weight: 700; }
+.etukortti-tier { font-size: 12px; opacity: 0.9; }
 
-/* --- Alavalikko (4 välilehteä) --- */
-.bottom-nav { display: flex; justify-content: space-around; background: #fff; border-top: 1px solid #e7ede9; padding: 8px 0 10px; }
+/* --- Pankki: kulutuskorien palkit --- */
+.basket-item { margin-bottom: 12px; }
+.basket-item:last-child { margin-bottom: 0; }
+.basket-bar-track {
+  height: 6px; background: #edf3ef; border-radius: 999px; overflow: hidden; margin-top: 6px;
+}
+.basket-bar-fill { height: 100%; background: var(--s-green); border-radius: 999px; }
+
+.opp-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0;
+}
+.opp-row + .opp-row { border-top: 1px solid #edf2ee; }
+
+/* --- Alavalikko --- */
+.bottom-nav {
+  display: flex; justify-content: space-around; background: #fff;
+  border-top: 1px solid #e6eee8;
+  padding: 8px 0 calc(9px + env(safe-area-inset-bottom, 0px));
+}
 .nav-btn {
   border: none; background: transparent; display: flex; flex-direction: column; align-items: center;
-  color: #5c6861; cursor: pointer; gap: 3px; width: 76px;
+  color: #637068; cursor: pointer; gap: 3px; width: 78px; padding: 0;
 }
 .nav-btn svg { width: 22px; height: 22px; }
 .nav-btn.active { color: var(--s-green); font-weight: 600; }
 .nav-btn small { font-size: 11px; }
 
-/* --- Modaali --- */
-.modal { position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
-.modal-card { background: #fff; border-radius: 16px; padding: 20px; width: 100%; }
-.modal-card h3 { margin: 0 0 8px; color: var(--s-green-dark); font-size: 18px; }
-.modal-card p { font-size: 13px; color: var(--s-muted); line-height: 1.45; margin: 0 0 14px; }
-.check-group { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; font-size: 14px; }
-.field-label { display: block; font-size: 13px; color: var(--s-muted); margin-bottom: 4px; }
-#savingsInput { width: 100%; padding: 9px; border: 1px solid var(--s-border); border-radius: 8px; margin-bottom: 14px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-
-.btn-primary { background: var(--s-green); color: #fff; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
-.btn-secondary { background: #eef3ef; color: var(--s-text); border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
-.btn-sm { padding: 7px 12px; font-size: 12px; }
+/* --- Painikkeet & Modaali --- */
+.me-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.btn-primary {
+  background: var(--s-green); color: #fff; border: none; padding: 10px 15px;
+  border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13.5px;
+}
+.btn-secondary {
+  background: #fff; color: var(--s-text); border: 1px solid var(--s-border);
+  padding: 10px 15px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13.5px;
+}
+.btn-sm { padding: 7px 12px; font-size: 12px; border-radius: 999px; }
 .full-width { width: 100%; }
+
+.modal {
+  position: absolute; inset: 0; background: rgba(12, 26, 18, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 18px; z-index: 30;
+}
+.modal-card { background: #fff; border-radius: 18px; padding: 20px; width: 100%; }
+.modal-card h3 { margin: 0 0 6px; font-size: 17px; color: var(--s-text); }
+.modal-card p { font-size: 13px; color: var(--s-muted); margin: 0 0 14px; }
+.check-group { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 16px; font-size: 14px; }
+.field-label { display: block; font-size: 12.5px; font-weight: 500; color: var(--s-muted); margin-bottom: 5px; }
+#savingsInput {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--s-border);
+  border-radius: 10px; font-size: 14px; margin-bottom: 16px;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
