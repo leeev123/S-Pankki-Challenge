@@ -139,8 +139,11 @@ def _build_financial_engine(df: pd.DataFrame, profile: dict[str, Any]) -> Financ
     return FinancialEngine(tx_records, profile=profile, as_of=max_date)
 
 
+def _weekly_to_monthly_cents(weekly_cents: int) -> int:
+    return proportional(weekly_cents, 52, 12)
+
+
 def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
-    """Muodostaa viikkobudjetin toteutuneesta keskimääräisestä kulutuksesta ja maksukyvyn realiteeteista."""
     target = str(statement_id).strip()
     cust_info = get_customer_info(target)
     df, source_name = load_statement_transactions(target)
@@ -149,7 +152,6 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     profile["statement_id"] = target
     profile["display_name"] = cust_info["display_name"]
     profile["role_label"] = cust_info["role_label"]
-    profile["customer_age"] = cust_info["customer_postal_code"]
     profile["customer_age"] = cust_info["customer_age"]
     profile["customer_postal_code"] = cust_info["customer_postal_code"]
 
@@ -169,7 +171,6 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     everyday_30d_cents = analysis_30d["by_bucket_cents"].get("everyday", 0)
     spent_week_cents = analysis_7d["by_bucket_cents"].get("everyday", 0)
 
-    # Keskimääräiset kuukausiluvut (jos historiaa on, muuten 30 pv toteuma)
     avg_income_c = history_avg.get("income", 0) or income_30d_cents
     avg_regular_c = history_avg.get("mandatory_regular", 0) or regular_30d_cents
     avg_irregular_c = history_avg.get("mandatory_irregular", 0) or irregular_30d_cents
@@ -179,8 +180,6 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     current_buffer_cents = cents(profile.get("current_buffer_eur", 850.0))
     irregular_reserve_cents = max(3500, proportional(avg_irregular_c, 110, 100))
 
-    # Realistinen säästötavoite: jos käyttäjä ei ole vielä itse muokannut tavoitetta,
-    # suhteutetaan säästö todelliseen ylijäämään (esim. opiskelijalle ei pakoteta 200 € säästöä).
     net_before_everyday_c = avg_income_c - avg_regular_c - irregular_reserve_cents
     if profile.get("onboarded"):
         savings_target_cents = cents(profile.get("monthly_savings_target_eur", 150.0))
@@ -194,17 +193,12 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
 
     everyday_adj_cents = cents(profile.get("everyday_adjustment_eur", 0.0))
 
-    # Viikkobudjetin muodostus:
-    # 1) Ankkurina asiakkaan todellinen keskimääräinen arkikulutus (avg_everyday_c)
-    # 2) Kattona talouden realiteetit (kuukausittainen maksukyky tai opiskelijan tilipuskuri)
     sustainable_from_income_c = net_before_everyday_c - savings_target_cents
     if sustainable_from_income_c >= avg_everyday_c and avg_everyday_c > 0:
         base_monthly_everyday_c = avg_everyday_c
     elif sustainable_from_income_c > 12000:
         base_monthly_everyday_c = sustainable_from_income_c
     else:
-        # Jos kuukausitulot < vuokra (esim. opiskelija elää osin tilillä olevalla opintolainalla),
-        # tarkistetaan tilin todellinen puskuri yli 850 € turvarajan 9 kk lukuvuodelle.
         liquid_runway_monthly_c = proportional(max(0, account_balance_cents - 85000), 1, 9)
         realistic_cap_c = max(14000, sustainable_from_income_c + liquid_runway_monthly_c)
         base_monthly_everyday_c = min(avg_everyday_c, realistic_cap_c) if avg_everyday_c > 0 else realistic_cap_c
@@ -222,11 +216,7 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
             val_eur = cents_to_eur(cat_cents)
             label_fi = category_label_fi(cat_key)
             everyday_cats_eur[label_fi] = val_eur
-            everyday_cats_fi.append({
-                "key": cat_key,
-                "label": label_fi,
-                "amount_eur": val_eur,
-            })
+            everyday_cats_fi.append({"key": cat_key, "label": label_fi, "amount_eur": val_eur})
 
     protected_cats = priorities_to_protected_categories(profile.get("priorities"))
     opportunities_data = fe.find_savings_opportunities(protected_categories=protected_cats, months=3)
@@ -293,75 +283,87 @@ def find_savings_opportunities_for_statement(statement_id: str) -> dict[str, Any
 
 
 def simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> dict[str, Any]:
+    """Muodostaa yhdenmukaiset vaihtoehdot, joissa jokaisessa näkyy täsmälliset €/vk, €/kk ja kk."""
     snap = get_financial_snapshot(statement_id)
     price_c = max(100, cents(price_eur))
+    clean_price = cents_to_eur(price_c)
+
     current_save_c = cents(snap["baskets_30d"]["monthly_savings_target_eur"])
-    baseline_save_c = max(5000, current_save_c)
     buffer_c = cents(snap["profile"].get("current_buffer_eur", 850.0))
 
-    months_normal = max(1, math.ceil(price_c / baseline_save_c))
-    months_boosted = max(1, math.ceil(price_c / (baseline_save_c + 8000)))
-    buffer_use_c = min(buffer_c, proportional(price_c, 50, 100))
+    # 1) Rauhallinen tahti (jos nykyinen säästö 0 €, käytetään 10 €/vk = 43 €/kk)
+    if current_save_c >= 4300:
+        steady_monthly_c = current_save_c
+        steady_delta_m_c = 0
+        steady_delta_w_eur = 0.0
+    else:
+        steady_delta_w_eur = -10.0
+        steady_delta_m_c = _weekly_to_monthly_cents(1000)
+        steady_monthly_c = current_save_c + steady_delta_m_c
 
-    steady_delta_eur = cents_to_eur(max(0, baseline_save_c - current_save_c))
-    steady_weekly_impact = -cents_to_eur(monthly_to_weekly(cents(steady_delta_eur))) if steady_delta_eur > 0 else 0.0
-    trim_delta_eur = round(steady_delta_eur + 80.0, 2)
-    trim_weekly_eur = cents_to_eur(monthly_to_weekly(cents(trim_delta_eur)))
-    hybrid_weekly_eur = cents_to_eur(monthly_to_weekly(6000))
+    months_steady = max(1, math.ceil(price_c / steady_monthly_c))
+    steady_w_total = cents_to_eur(monthly_to_weekly(steady_monthly_c))
+    steady_m_total = cents_to_eur(steady_monthly_c)
+    steady_delta_m_eur = cents_to_eur(steady_delta_m_c)
+
+    # 2) Nopeutettu tahti (-25 €/vk = -108.33 €/kk lisäsäästö)
+    fast_cut_w_eur = 25.0
+    fast_delta_m_c = steady_delta_m_c + _weekly_to_monthly_cents(2500)
+    fast_monthly_c = current_save_c + fast_delta_m_c
+    months_fast = max(1, math.ceil(price_c / fast_monthly_c))
+    fast_delta_m_eur = cents_to_eur(fast_delta_m_c)
+    fast_total_w_cut = round(abs(steady_delta_w_eur) + fast_cut_w_eur, 0)
+
+    # 3) Puskuri avuksi (käytetään korkeintaan 50 % puskurista, loppu säästetään -15 €/vk lisätahdilla)
+    buffer_use_c = min(proportional(buffer_c, 50, 100), proportional(price_c, 40, 100))
+    remaining_for_item_c = max(0, price_c - buffer_use_c)
+    hybrid_delta_m_c = steady_delta_m_c + _weekly_to_monthly_cents(1500)
+    hybrid_monthly_c = max(4300, current_save_c + hybrid_delta_m_c)
+    months_hybrid = max(1, math.ceil(remaining_for_item_c / hybrid_monthly_c)) if remaining_for_item_c > 0 else 1
     buffer_use_eur = cents_to_eur(buffer_use_c)
-    clean_price = cents_to_eur(price_c)
+    hybrid_delta_m_eur = cents_to_eur(hybrid_delta_m_c)
+    hybrid_w_cut = round(abs(steady_delta_w_eur) + 15.0, 0)
 
     return {
         "item_name": item_name,
         "price_eur": clean_price,
-        "current_weekly_safe_to_spend": snap["weekly_safe_to_spend_eur"],
-        "current_monthly_savings": cents_to_eur(current_save_c),
-        "current_buffer_eur": cents_to_eur(buffer_c),
+        "current_monthly_savings_eur": cents_to_eur(current_save_c),
         "options": [
             {
                 "plan_id": f"save_steady_{int(clean_price)}",
-                "title": f"Tasainen säästö ({months_normal} kk)",
-                "summary": (
-                    f"Säästät {cents_to_eur(baseline_save_c):.0f} €/kk ja saavutat kohteen "
-                    f"{item_name} ({clean_price:.0f} €) {months_normal} kuukaudessa."
-                ),
-                "impact_weekly_eur": steady_weekly_impact,
-                "impact_savings_months": months_normal,
-                "monthly_savings_delta_eur": steady_delta_eur,
-                "everyday_budget_delta_eur": -steady_delta_eur,
+                "title": "Rauhallinen tahti",
+                "summary": f"Säästö {steady_w_total:.0f} €/vk ({steady_m_total:.0f} €/kk) · valmis {months_steady} kk kuluttua.",
+                "impact_weekly_eur": steady_delta_w_eur,
+                "impact_savings_months": months_steady,
+                "monthly_savings_delta_eur": steady_delta_m_eur,
+                "everyday_budget_delta_eur": -steady_delta_m_eur,
                 "buffer_delta_eur": 0.0,
                 "goal_name": item_name,
                 "goal_target_eur": clean_price,
             },
             {
                 "plan_id": f"trim_everyday_{int(clean_price)}",
-                "title": f"Nopeutettu tavoite ({months_boosted} kk)",
-                "summary": (
-                    f"Nipistät arjen ei-kriittisistä menoista {trim_weekly_eur:.0f} €/vk ja "
-                    f"saavutat kohteen {item_name} {months_boosted} kuukaudessa."
-                ),
-                "impact_weekly_eur": -round(trim_weekly_eur, 2),
-                "impact_savings_months": months_boosted,
-                "monthly_savings_delta_eur": trim_delta_eur,
-                "everyday_budget_delta_eur": -trim_delta_eur,
+                "title": "Nopeutettu säästö",
+                "summary": f"Lisäsäästö -{fast_total_w_cut:.0f} €/vk (-{fast_delta_m_eur:.0f} €/kk arjesta) · valmis {months_fast} kk kuluttua.",
+                "impact_weekly_eur": -fast_total_w_cut,
+                "impact_savings_months": months_fast,
+                "monthly_savings_delta_eur": fast_delta_m_eur,
+                "everyday_budget_delta_eur": -fast_delta_m_eur,
                 "buffer_delta_eur": 0.0,
                 "goal_name": item_name,
                 "goal_target_eur": clean_price,
             },
             {
                 "plan_id": f"hybrid_buffer_{int(clean_price)}",
-                "title": "Hyödynnä puskuria & täydennä",
-                "summary": (
-                    f"Käytät puskurista {buffer_use_eur:.0f} € ja palautat sen ohjaamalla "
-                    f"+60 €/kk ({hybrid_weekly_eur:.0f} €/vk) takaisin puskuriin."
-                ),
-                "impact_weekly_eur": -round(hybrid_weekly_eur, 2),
-                "impact_savings_months": 1,
-                "monthly_savings_delta_eur": 60.0,
-                "everyday_budget_delta_eur": -60.0,
+                "title": f"Puskuri avuksi ({buffer_use_eur:.0f} €)",
+                "summary": f"Käytät {buffer_use_eur:.0f} € puskurista + säästät -{hybrid_w_cut:.0f} €/vk (-{hybrid_delta_m_eur:.0f} €/kk) · valmis {months_hybrid} kk.",
+                "impact_weekly_eur": -hybrid_w_cut,
+                "impact_savings_months": months_hybrid,
+                "monthly_savings_delta_eur": hybrid_delta_m_eur,
+                "everyday_budget_delta_eur": -hybrid_delta_m_eur,
                 "buffer_delta_eur": -buffer_use_eur,
-                "goal_name": f"Puskurin palautus ({item_name})",
-                "goal_target_eur": buffer_use_eur,
+                "goal_name": item_name,
+                "goal_target_eur": clean_price,
             },
         ],
     }
@@ -397,24 +399,20 @@ def simulate_category_cut(statement_id: str, category_name: str, cut_percent: fl
 
     monthly_save_eur = cents_to_eur(monthly_save_c)
     weekly_gain_eur = cents_to_eur(weekly_gain_c)
-    current_monthly_eur = cents_to_eur(matched_cents)
 
     return {
         "category": matched_label,
-        "current_monthly_eur": current_monthly_eur,
+        "current_monthly_eur": cents_to_eur(matched_cents),
         "cut_percent": float(pct_int),
         "monthly_savings_eur": monthly_save_eur,
         "yearly_savings_eur": cents_to_eur(monthly_save_c * 12),
         "weekly_gain_eur": weekly_gain_eur,
         "action_card": {
             "plan_id": f"cut_{canonical_query or 'arki'}_{pct_int}",
-            "title": f"Lukitse +{monthly_save_eur:.0f} €/kk säästö ({matched_label})",
-            "summary": (
-                f"Vähennät kategoriaa {matched_label.lower()} {pct_int} % ja siirrät "
-                f"{monthly_save_eur:.2f} €/kk säästöön."
-            ),
-            "impact_weekly_eur": -weekly_gain_eur,
-            "impact_savings_months": None,
+            "title": f"{matched_label} -{pct_int} %",
+            "summary": f"Vapauttaa {weekly_gain_eur:.0f} €/vk ({monthly_save_eur:.0f} €/kk · {cents_to_eur(monthly_save_c * 12):.0f} €/v) säästöön.",
+            "impact_weekly_eur": -round(weekly_gain_eur, 0),
+            "impact_savings_months": 12,
             "monthly_savings_delta_eur": monthly_save_eur,
             "everyday_budget_delta_eur": -monthly_save_eur,
             "buffer_delta_eur": 0.0,
@@ -432,19 +430,15 @@ def simulate_unexpected_expense(statement_id: str, description: str, price_eur: 
     monthly_drop_c = proportional(price_c, 1, 2)
     weekly_drop_c = monthly_to_weekly(monthly_drop_c)
     buffer_used_c = min(current_buffer_c, price_c)
-    buffer_after_c = max(0, current_buffer_c - price_c)
 
     clean_price = cents_to_eur(price_c)
-    weekly_drop_eur = cents_to_eur(weekly_drop_c)
+    weekly_drop_eur = round(cents_to_eur(weekly_drop_c), 0)
     monthly_drop_eur = cents_to_eur(monthly_drop_c)
 
     card = {
         "plan_id": f"buffer_absorb_{int(clean_price)}",
-        "title": "Kata puskurista & tasaa 2 kk aikana",
-        "summary": (
-            f"Katat menon ({description}, {clean_price:.0f} €) puskurista ja tasaat arjen "
-            f"käyttövaraa {weekly_drop_eur:.0f} €/vk kahden kuukauden ajan."
-        ),
+        "title": f"Kata puskurista ({clean_price:.0f} €)",
+        "summary": f"Täydennät puskurin takaisin 2 kk aikana (-{weekly_drop_eur:.0f} €/vk · -{monthly_drop_eur:.0f} €/kk).",
         "impact_weekly_eur": -weekly_drop_eur,
         "impact_savings_months": 2,
         "monthly_savings_delta_eur": 0.0,
@@ -457,7 +451,7 @@ def simulate_unexpected_expense(statement_id: str, description: str, price_eur: 
         "description": description,
         "price_eur": clean_price,
         "current_buffer_eur": cents_to_eur(current_buffer_c),
-        "buffer_after_eur": cents_to_eur(buffer_after_c),
+        "buffer_after_eur": cents_to_eur(max(0, current_buffer_c - price_c)),
         "weekly_recovery_drop_eur": weekly_drop_eur,
         "action_card": card,
     }

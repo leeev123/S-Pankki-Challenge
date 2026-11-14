@@ -10,23 +10,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <symbol id="s-brand-solid" viewBox="0 0 32 32">
-        <path d="M26.6 5.0H18.6C14.8 5.0 13.3 6.8 12.7 10.6L11.5 17.3C11.3 18.5 10.5 19.0 9.2 19.0H6.84L6.30 22.0H9.5C12.6 22.0 14.0 20.5 14.5 17.5L15.7 10.8C16.0 9.0 17.0 8.0 18.8 8.0H26.06L26.6 5.0Z" fill="currentColor"/>
-        <path d="M26.6 5.0H18.6C14.8 5.0 13.3 6.8 12.7 10.6L11.5 17.3C11.3 18.5 10.5 19.0 9.2 19.0H6.84L6.30 22.0H9.5C12.6 22.0 14.0 20.5 14.5 17.5L15.7 10.8C16.0 9.0 17.0 8.0 18.8 8.0H26.06L26.6 5.0Z" transform="rotate(180 16 16)" fill="currentColor"/>
-      </symbol>
-      <symbol id="s-brand-line" viewBox="0 0 24 24">
-        <path d="M19.8 3.2H15.2C12.2 3.2 10.8 4.8 10.3 7.9L9.4 14.9C9.2 15.9 8.7 16.3 7.8 16.3H5.0L4.2 20.8H8.8C11.8 20.8 13.2 19.2 13.7 16.1L14.6 9.1C14.8 8.1 15.3 7.7 16.2 7.7H19.0L19.8 3.2Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
-        <path d="M19.4 5.45H15.4C13.6 5.45 12.8 6.3 12.4 8.3L11.6 15.7C11.2 17.7 10.4 18.55 8.6 18.55H4.6" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+      <symbol id="s-logo" viewBox="0 0 100 100">
+        <path
+          d="M 77.5 6.85 H 72.2 A 35.55 35.55 0 0 0 36.65 42.4 V 57.6 A 8.85 8.85 0 0 1 27.8 66.45 H 25.15 V 79.8 H 27.8 A 22.2 22.2 0 0 0 50.0 57.6 V 42.4 A 22.2 22.2 0 0 1 72.2 20.2 H 74.85 V 33.55 H 72.2 A 8.85 8.85 0 0 0 63.35 42.4 V 57.6 A 35.55 35.55 0 0 1 27.8 93.15 H 22.5"
+          fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10"
+        />
       </symbol>
       <symbol id="icon-stili-book" viewBox="0 0 24 26">
         <rect x="2.5" y="2" width="15.5" height="19.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.65"/>
         <path d="M5.5 21.5V23.5C5.5 24.05 5.95 24.5 6.5 24.5H19.5C20.05 24.5 20.5 24.05 20.5 23.5V5.5H18" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M14.8 6.5H11.8C10.3 6.5 9.6 7.3 9.4 8.8L8.9 12.5C8.8 13.1 8.5 13.4 7.8 13.4H6.4L6.1 15.2H9.2C10.7 15.2 11.4 14.4 11.6 12.9L12.1 9.2C12.2 8.6 12.5 8.3 13.2 8.3H14.5L14.8 6.5Z" fill="currentColor"/>
+        <g transform="translate(4.8, 5.8) scale(0.11)">
+          <path d="M 77.5 6.85 H 72.2 A 35.55 35.55 0 0 0 36.65 42.4 V 57.6 A 8.85 8.85 0 0 1 27.8 66.45 H 25.15 V 79.8 H 27.8 A 22.2 22.2 0 0 0 50.0 57.6 V 42.4 A 22.2 22.2 0 0 1 72.2 20.2 H 74.85 V 33.55 H 72.2 A 8.85 8.85 0 0 0 63.35 42.4 V 57.6 A 35.55 35.55 0 0 1 27.8 93.15 H 22.5" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10"/>
+        </g>
       </symbol>
       <symbol id="icon-receipt" viewBox="0 0 24 24">
         <path d="M5 2.8H19V21.2L16.7 19.2L14.3 21.2L12 19.2L9.7 21.2L7.3 19.2L5 21.2V2.8Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/>
@@ -41,9 +41,12 @@
   </svg>
 
   <div class="phone-shell">
+    <!-- 1. ASIAKASPROFIILIN VALINTA -->
     <div id="profileGate" class="gate-screen">
       <div class="gate-header">
-        <div class="gate-logo" aria-label="S-Pankki"><svg><use href="#s-brand-solid"/></svg></div>
+        <div class="gate-logo" style="background:#ffffff; color:var(--s-green); border:1px solid #dce7df;" aria-label="S-mobiili">
+          <svg style="width:36px; height:36px;"><use href="#s-logo"/></svg>
+        </div>
         <div class="gate-eyebrow">S-mobiili · Suunta</div>
         <h1>Valitse asiakasprofiili</h1>
         <p>Viikkobudjetti muodostetaan asiakkaan keskimääräisestä kulutuksesta ja maksukyvystä.</p>
@@ -52,19 +55,38 @@
       <div id="gateStatus" class="gate-status"></div>
     </div>
 
+    <!-- 2. KOKO RUUDUN SUUNTA-KÄYTTÖÖNOTTONÄKYMÄ -->
+    <div id="onboardingScreen" class="onboarding-screen hidden">
+      <div class="ob-topbar">
+        <button type="button" class="back-btn" id="obBackBtn" onclick="handleOnboardingBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          <span id="obBackLabel">Sulje</span>
+        </button>
+        <span class="ob-step-indicator" id="obStepText">Vaihe 1 / 3</span>
+        <span style="width:52px;"></span>
+      </div>
+      <div class="ob-progress-track">
+        <div class="ob-progress-fill" id="obProgressFill" style="width:33.3%"></div>
+      </div>
+
+      <div class="ob-body" id="obBody"></div>
+
+      <div class="ob-footer">
+        <button type="button" class="btn-primary full-width ob-main-btn" id="obNextBtn" onclick="handleOnboardingNext()">Jatka</button>
+      </div>
+    </div>
+
+    <!-- 3. S-MOBIILI + SUUNTA -->
     <div id="appShell" class="app-shell hidden">
       <header class="topbar">
-        <button class="icon-btn" onclick="logoutAndReset()" title="Kirjaudu ulos ja nollaa" aria-label="Kirjaudu ulos">
+        <button class="icon-btn" onclick="logoutAndReset()" title="Kirjaudu ulos" aria-label="Kirjaudu ulos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M13.5 7V4.5C13.5 3.95 13.05 3.5 12.5 3.5H4.5C3.95 3.5 3.5 3.95 3.5 4.5V19.5C3.5 20.05 3.95 20.5 4.5 20.5H12.5C13.05 20.5 13.5 20.05 13.5 19.5V17"/>
             <line x1="8.5" y1="12" x2="20.5" y2="12"/>
             <polyline points="17 8.5 20.5 12 17 15.5"/>
           </svg>
         </button>
-        <div class="topbar-center">
-          <button id="activeProfileBadge" class="profile-pill hidden" onclick="logoutAndReset()"></button>
-        </div>
-        <button class="icon-btn" onclick="openFullChat()" title="Suunta-keskustelu" aria-label="Suunta-keskustelu">
+        <button class="icon-btn" onclick="handleTopChatClick()" title="Suunta" aria-label="Suunta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3.5 4.5H20.5V16.5H10.8L6.5 20.2V16.5H3.5V4.5Z"/>
           </svg>
@@ -73,62 +95,86 @@
 
       <main class="content">
         <section id="tab-home" class="tab-panel active">
-          <div class="hero-section">
-            <div id="classicHero">
-              <div class="bonus-top-title">Seuraavaan tasoon <span id="classicNextTier">56,7 €</span></div>
-              <div class="bonus-sub">
-                <span>Saatat jo olla seuraavalla bonustasolla</span>
-                <span class="info-circle">i</span>
-              </div>
-              <div class="bonus-stage">
-                <div class="tier-row tier-top"><span>4,0 %</span><span class="dashed-line"></span><span>700 €</span></div>
-                <div class="tier-row tier-mid">
-                  <span class="tier-side left">3,5 %</span>
-                  <div class="house-card">
-                    <svg class="house-bg" preserveAspectRatio="none"><use href="#bonus-house-bg"/></svg>
-                    <div class="house-content">
-                      <span class="house-label">Bonusta tulossa</span>
-                      <strong class="house-amount tabular" id="classicBonusAmount">23,4 €</strong>
-                    </div>
-                  </div>
-                  <span class="tier-side right">600 €</span>
+          <!-- BONUS -->
+          <div class="hero-section" id="heroSection">
+            <div id="fullBonusCollapse" class="anim-collapse open">
+              <div class="anim-collapse-inner">
+                <div class="bonus-top-title">Seuraavaan tasoon <span id="classicNextTier">56,7 €</span></div>
+                <div class="bonus-sub">
+                  <span>Saatat jo olla seuraavalla bonustasolla</span>
+                  <span class="info-circle">i</span>
                 </div>
-              </div>
-              <button class="hero-link" onclick="setSuuntaEnabled(true)">
-                <span>Katso kokonaishyötysi</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
-            </div>
-
-            <div id="suuntaHero" class="hidden">
-              <div class="bonus-top-title">Viikon jäljellä oleva käyttövara</div>
-              <div class="bonus-sub" id="dailyHint">Viikkobudjetti perustuu keskimääräiseen kulutukseen</div>
-              <div class="bonus-stage">
-                <div class="tier-row tier-mid single-house">
-                  <div class="house-card">
-                    <svg class="house-bg" preserveAspectRatio="none"><use href="#bonus-house-bg"/></svg>
-                    <div class="house-content">
-                      <span class="house-label">Käytettävissä tällä viikolla</span>
-                      <strong class="house-amount tabular" id="weeklySafeAmount">0,00 €</strong>
+                <div class="bonus-stage">
+                  <div class="tier-row tier-top"><span>4,0 %</span><span class="dashed-line"></span><span>700 €</span></div>
+                  <div class="tier-row tier-mid">
+                    <span class="tier-side left">3,5 %</span>
+                    <div class="house-card">
+                      <svg class="house-bg" preserveAspectRatio="none"><use href="#bonus-house-bg"/></svg>
+                      <div class="house-content">
+                        <span class="house-label">Bonusta tulossa</span>
+                        <strong class="house-amount tabular" id="classicBonusAmount">23,4 €</strong>
+                      </div>
                     </div>
+                    <span class="tier-side right">600 €</span>
                   </div>
                 </div>
+                <button class="hero-link" onclick="switchTab('etukortti')">
+                  <span>Katso kokonaishyötysi</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
               </div>
-              <button class="hero-link" onclick="switchTab('bank')">
-                <span id="goalCaption">Katso 3 kulutuskoria &amp; suunnitelma</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
             </div>
 
-            <div class="dots">
-              <button type="button" class="dot active" id="dot1" onclick="showHeroSlide('bonus')" aria-label="Bonus"></button>
-              <button type="button" class="dot" id="dot2" onclick="showHeroSlide('suunta')" aria-label="Suunta"></button>
+            <div id="compactBonusCollapse" class="anim-collapse">
+              <div class="anim-collapse-inner">
+                <div class="compact-bonus-bar">
+                  <div class="compact-bonus-left">
+                    <div class="mini-house-badge">
+                      <svg class="house-bg" preserveAspectRatio="none"><use href="#bonus-house-bg"/></svg>
+                      <span class="tabular" id="compactBonusAmount">23,4 €</span>
+                    </div>
+                    <div class="compact-bonus-texts">
+                      <strong>Bonusta tulossa</strong>
+                      <span>Taso 3,5 % → 4,0 %</span>
+                    </div>
+                  </div>
+                  <div class="compact-bonus-right">
+                    <span>Seuraavaan tasoon</span>
+                    <strong class="tabular" id="compactNextTier">56,7 €</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUURENNETTU VIIKON KÄYTTÖVARA -OSIO BONUKSEN ALLA -->
+          <div id="allowanceDrawer" class="anim-collapse allowance-drawer">
+            <div class="anim-collapse-inner">
+              <div id="allowanceBanner" class="allowance-banner">
+                <div class="allowance-top">
+                  <div>
+                    <div class="allowance-eyebrow">Viikon jäljellä oleva käyttövara</div>
+                    <div class="allowance-amount tabular" id="weeklySafeAmount">0,00 €</div>
+                  </div>
+                  <button class="allowance-plan-btn" onclick="switchTab('bank')">
+                    <span id="goalCaption">Kokonaiskuva</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                </div>
+                <div class="allowance-meter-track">
+                  <div id="allowanceMeterFill" class="allowance-meter-fill" style="width:0%"></div>
+                </div>
+                <div class="allowance-meta">
+                  <span id="dailyHint">Viikkobudjetti</span>
+                  <span id="allowanceStatusTag">Suunnitelmassa</span>
+                </div>
+              </div>
             </div>
           </div>
 
           <div class="mint-surface">
-            <div id="classicQuickActions" class="quick-actions">
-              <button class="qa-item" onclick="setSuuntaEnabled(true)">
+            <div id="topQuickActions" class="quick-actions">
+              <button class="qa-item" onclick="handleTopChatClick()">
                 <span class="qa-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></span>
                 <span>Uusi maksu</span>
               </button>
@@ -142,51 +188,57 @@
               </button>
             </div>
 
-            <div id="suuntaQuickActions" class="quick-actions hidden">
-              <button class="qa-item" onclick="askAndOpenSuunta('Haluan ostaa 1 200 € läppärin')">
-                <span class="qa-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></span>
-                <span>Suunnittele<br/>hankinta</span>
-              </button>
-              <button class="qa-item" onclick="switchTab('bank')">
-                <span class="qa-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="18" y1="19" x2="18" y2="10"/><line x1="12" y1="19" x2="12" y2="5"/><line x1="6" y1="19" x2="6" y2="14"/></svg></span>
-                <span>3 kulutus-<br/>koria</span>
-              </button>
-              <button class="qa-item" onclick="askAndOpenSuunta('Tuli yllättävä 350 € autohuolto')">
-                <span class="qa-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 21s7.5-3.8 7.5-9.5V5.2L12 2.5 4.5 5.2v6.3C4.5 17.2 12 21 12 21z"/></svg></span>
-                <span>Yllättävä<br/>meno</span>
-              </button>
+            <!-- A) ENNEN KÄYTTÖÖNOTTOA: Ei slideria, vaan selkeä käyttöönottokortti -->
+            <div id="suuntaInviteCard" class="card suunta-invite-box">
+              <div class="suunta-brand" style="margin-bottom:6px;">
+                <span class="suunta-status-dot active"></span>
+                <span class="suunta-wordmark">Haluatko ottaa Suunnan käyttöön?</span>
+              </div>
+              <p class="suunta-lead" style="margin-bottom:13px;">Rakenna oma viikkobudjetti ja säästötavoite muutamassa sekunnissa toteutuneiden ostojesi pohjalta.</p>
+              <button type="button" class="btn-primary full-width" onclick="openOnboardingScreen(1)">Ota Suunta käyttöön</button>
             </div>
 
-            <div class="card suunta-card">
+            <!-- B) KÄYTTÖÖNOTON JÄLKEEN: Päälle/pois-slider + toimintopainikkeet + tiivis chat -->
+            <div id="homeSuuntaCard" class="card suunta-card hidden">
               <div class="suunta-head">
                 <div class="suunta-brand">
-                  <span id="suuntaDot" class="suunta-status-dot"></span>
+                  <span id="suuntaDot" class="suunta-status-dot active"></span>
                   <span class="suunta-wordmark">Suunta</span>
-                  <span class="suunta-tag">Talousvalmentaja</span>
                 </div>
                 <div class="suunta-head-controls">
-                  <button id="suuntaExpandBtn" class="btn-subtle hidden" onclick="switchTab('chat')">Laajenna</button>
-                  <button type="button" id="homeSuuntaSwitch" class="toggle-switch" role="switch" aria-checked="false" onclick="toggleSuuntaMode()" title="Suunta päälle / pois">
+                  <button id="suuntaExpandBtn" class="btn-subtle" onclick="switchTab('chat')">Laajenna</button>
+                  <button type="button" id="homeSuuntaSwitch" class="toggle-switch on" role="switch" aria-checked="true" onclick="toggleSuuntaMode()" title="Suunta päälle / pois">
                     <span class="toggle-thumb"></span>
                   </button>
                 </div>
               </div>
 
-              <div id="suuntaOffBody">
-                <p class="suunta-lead">Ota Suunta käyttöön kytkimestä. Käyttöönotto piilottaa tilin kokonaissaldon ja näyttää viikon turvallisen käyttövaran.</p>
-                <form class="suunta-composer" id="homePreChatForm">
-                  <input type="text" id="homePreChatInput" placeholder="Kysy Suunnalta ja aktivoi..." autocomplete="off" />
-                  <button type="submit" class="composer-send-btn">Lähetä</button>
-                </form>
+              <div id="suuntaPausedBody" class="hidden">
+                <p class="suunta-lead">Suunta on pois päältä. Kytke takaisin päälle nähdäksesi viikon käyttövarasi.</p>
               </div>
 
-              <div id="suuntaOnBody" class="hidden">
-                <div class="suunta-chips">
-                  <button type="button" class="chip" onclick="sendMessage('Paljonko voin käyttää tällä viikolla?')">Viikon käyttövara</button>
-                  <button type="button" class="chip" onclick="sendMessage('Haluan ostaa 1 200 € läppärin')">1 200 € läppäri</button>
-                  <button type="button" class="chip" onclick="sendMessage('Millainen kuluttaja olen?')">Kulutusprofiili</button>
+              <div id="suuntaOnBody" class="suunta-on-body">
+                <!-- Selkeät toimintopainikkeet tyhjän tilan sijaan -->
+                <div class="suunta-quick-grid">
+                  <button type="button" class="suunta-action-tile" onclick="openOnboardingScreen(3)">
+                    <strong>Muuta budjettia</strong>
+                    <span>Säädä säästötahtia</span>
+                  </button>
+                  <button type="button" class="suunta-action-tile" onclick="toggleQuickPurchase()">
+                    <strong>Uusi hankinta</strong>
+                    <span>Laske toteutustavat</span>
+                  </button>
                 </div>
+
+                <!-- Pikaikkuna uudelle hankinnalle -->
+                <div id="quickPurchaseBox" class="quick-purchase-box hidden">
+                  <input type="text" id="qpName" placeholder="Mitä hankit? (esim. pyörä)" autocomplete="off" />
+                  <input type="number" id="qpPrice" placeholder="Hinta €" min="10" step="10" />
+                  <button type="button" class="btn-primary" onclick="submitQuickPurchase()">Laske</button>
+                </div>
+
                 <div class="home-chat-stream" id="homeChatMessages"></div>
+
                 <form class="suunta-composer" id="homeChatForm">
                   <input type="text" id="homeChatInput" placeholder="Kirjoita viesti..." autocomplete="off" />
                   <button type="submit" id="homeChatSubmit" class="composer-send-btn">Lähetä</button>
@@ -194,43 +246,47 @@
               </div>
             </div>
 
-            <h2 class="section-title">Tilit ja kortit</h2>
-            <div class="card">
-              <div class="row-between">
+            <!-- TILIT, KORTIT JA KUITIT (näkyvät rullaamalla alas kun Suunta on päällä) -->
+            <div class="below-fold-section">
+              <h2 class="section-title">Tilit ja kortit</h2>
+              <div class="card">
+                <div class="row-between">
+                  <div class="row-left">
+                    <svg class="stili-svg-icon" aria-hidden="true"><use href="#icon-stili-book"/></svg>
+                    <div class="item-title">S-Tili</div>
+                  </div>
+                  <strong class="amount-green tabular" id="accountBalance">0,00 €</strong>
+                </div>
+                <div class="divider"></div>
                 <div class="row-left">
-                  <svg class="stili-svg-icon" aria-hidden="true"><use href="#icon-stili-book"/></svg>
-                  <div class="item-title">S-Tili</div>
+                  <div class="s-visa-icon" aria-hidden="true">
+                    <svg style="width:16px; height:16px;"><use href="#s-logo"/></svg>
+                    <small>VISA</small>
+                  </div>
+                  <div>
+                    <div class="item-title">S-Etukortti Visa Debit online</div>
+                    <div class="item-sub">Debit **** 9460</div>
+                  </div>
                 </div>
-                <strong class="amount-green tabular" id="accountBalance">0,00 €</strong>
+                <div class="divider"></div>
+                <button class="center-link" id="toggleDetailsBtn" onclick="toggleCardDetails()">Piilota tiedot</button>
               </div>
-              <div class="divider"></div>
-              <div class="row-left">
-                <div class="s-visa-icon" aria-hidden="true">
-                  <svg><use href="#s-brand-solid"/></svg>
-                  <small>VISA</small>
-                </div>
-                <div>
-                  <div class="item-title">S-Etukortti Visa Debit online</div>
-                  <div class="item-sub">Debit **** 9460</div>
-                </div>
-              </div>
-              <div class="divider"></div>
-              <button class="center-link" id="toggleDetailsBtn" onclick="toggleCardDetails()">Piilota tiedot</button>
-            </div>
 
-            <div class="row-between section-header">
-              <h2 class="section-title">Kuitit</h2>
-              <button class="link-btn" onclick="switchTab('bank')">Avaa</button>
+              <div class="row-between section-header">
+                <h2 class="section-title">Kuitit</h2>
+                <button class="link-btn" onclick="switchTab('bank')">Avaa</button>
+              </div>
+              <div class="card" id="homeReceiptCard"></div>
             </div>
-            <div class="card" id="homeReceiptCard"></div>
           </div>
         </section>
 
+        <!-- S-ETUKORTTI -->
         <section id="tab-etukortti" class="tab-panel mint-full">
           <h2 class="section-title">S-Etukortti</h2>
           <div class="etukortti-visual">
             <div class="etukortti-top">
-              <svg class="etukortti-mark"><use href="#s-brand-solid"/></svg>
+              <svg class="etukortti-mark"><use href="#s-logo"/></svg>
               <span>S-Etukortti</span>
             </div>
             <div class="etukortti-bottom">
@@ -245,41 +301,30 @@
           <div class="card" id="etukorttiReceipts"></div>
         </section>
 
+        <!-- PANKKI -->
         <section id="tab-bank" class="tab-panel mint-full">
-          <h2 class="section-title">Kolme kulutuskoria (30 pv)</h2>
-          <div class="card" id="basketsCard"></div>
+          <h2 class="section-title">Talouden kokonaiskuva</h2>
+          <div id="basketsCard"></div>
           <h2 class="section-title">Säästöpotentiaali</h2>
           <div class="card" id="opportunitiesCard"></div>
-          <h2 class="section-title">6 kk ennuste</h2>
-          <div class="card" id="forecastCard"></div>
-          <h2 class="section-title">Arjen kategoriat</h2>
+          <h2 class="section-title">Arjen menot kategorioittain</h2>
           <div class="card" id="categoriesCard"></div>
           <h2 class="section-title">Tilitapahtumat</h2>
           <div class="card" id="allReceiptsCard"></div>
         </section>
 
+        <!-- MINÄ -->
         <section id="tab-me" class="tab-panel mint-full">
           <h2 class="section-title">Asiakasprofiili</h2>
           <div class="card" id="meProfileCard"></div>
           <h2 class="section-title">Suunta-asetukset</h2>
-          <div class="card">
-            <div class="row-between">
-              <div>
-                <div class="item-title">Suunta-talousvalmentaja</div>
-                <div class="item-sub">Piilottaa tilin kokonaissaldon ja näyttää viikon käyttövaran</div>
-              </div>
-              <button type="button" id="meSuuntaSwitch" class="toggle-switch" role="switch" aria-checked="false" onclick="toggleSuuntaMode()" aria-label="Suunta päälle tai pois">
-                <span class="toggle-thumb"></span>
-              </button>
-            </div>
-            <div class="divider"></div>
-            <button class="center-link" onclick="openOnboarding()">Muokkaa prioriteetteja &amp; tavoitetta</button>
-          </div>
+          <div class="card" id="meSuuntaSettingsCard"></div>
           <div class="me-actions">
             <button class="btn-secondary full-width" onclick="logoutAndReset()">Vaihda asiakasprofiilia (Nollaa istunto)</button>
           </div>
         </section>
 
+        <!-- KOKO RUUDUN KESKUSTELU -->
         <section id="tab-chat" class="tab-panel">
           <div class="suunta-full-header">
             <button class="back-btn" onclick="switchTab('home')">
@@ -293,23 +338,17 @@
               </div>
               <span class="suunta-full-sub" id="chatHeaderAllowance">Viikon käyttövara</span>
             </div>
-            <button class="btn-subtle" onclick="setSuuntaEnabled(false); switchTab('home');">Pois päältä</button>
+            <button class="btn-subtle" onclick="openOnboardingScreen(3)">Muuta budjettia</button>
           </div>
 
-          <div class="suunta-chips full-chips">
-            <button type="button" class="chip" onclick="sendMessage('Haluan ostaa 1 200 € läppärin')">1 200 € läppäri</button>
-            <button type="button" class="chip" onclick="sendMessage('Paljonko voin käyttää tällä viikolla?')">Viikon käyttövara</button>
-            <button type="button" class="chip" onclick="sendMessage('Paljonko säästän jos vähennän ravintoloita 20 %?')">-20 % ravintolat</button>
-            <button type="button" class="chip" onclick="sendMessage('Millainen kuluttaja olen?')">Kulutusprofiili</button>
-          </div>
-
-          <div class="chat-messages" id="chatMessages"></div>
-
-          <div class="full-composer-bar">
-            <form class="suunta-composer" id="chatForm">
-              <input type="text" id="chatInput" placeholder="Kysy tai suunnittele hankinta..." autocomplete="off" />
-              <button type="submit" id="chatSubmit" class="composer-send-btn">Lähetä</button>
-            </form>
+          <div class="full-chat-body">
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="full-composer-bar">
+              <form class="suunta-composer" id="chatForm">
+                <input type="text" id="chatInput" placeholder="Kirjoita viesti..." autocomplete="off" />
+                <button type="submit" id="chatSubmit" class="composer-send-btn">Lähetä</button>
+              </form>
+            </div>
           </div>
         </section>
       </main>
@@ -320,7 +359,7 @@
           <small>Koti</small>
         </button>
         <button class="nav-btn" data-tab="etukortti" onclick="switchTab('etukortti')">
-          <svg><use href="#s-brand-line"/></svg>
+          <svg><use href="#s-logo"/></svg>
           <small>S-Etukortti</small>
         </button>
         <button class="nav-btn" data-tab="bank" onclick="switchTab('bank')">
@@ -340,25 +379,7 @@
         </button>
       </nav>
     </div>
-
-    <div id="onboardingModal" class="modal hidden">
-      <div class="modal-card">
-        <h3>Henkilökohtaiset prioriteetit</h3>
-        <p>Valitse asiat, joista Suunta ei ehdota karsimista:</p>
-        <div class="check-group" id="priorityChecks">
-          <label><input type="checkbox" value="Laadukas arkiruoka" checked /> Laadukas arkiruoka</label>
-          <label><input type="checkbox" value="Liikunta &amp; harrastukset" checked /> Liikunta &amp; harrastukset</label>
-          <label><input type="checkbox" value="Matkustaminen" /> Matkustaminen</label>
-        </div>
-        <label class="field-label" for="savingsInput">Kuukausisäästötavoite (€)</label>
-        <input type="number" id="savingsInput" value="150" min="0" step="25" />
-        <div class="modal-actions">
-          <button class="btn-secondary" onclick="closeOnboarding()">Peruuta</button>
-          <button class="btn-primary" onclick="saveOnboarding()">Tallenna</button>
-        </div>
-      </div>
-    </div>
   </div>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
