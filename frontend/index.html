@@ -2,87 +2,68 @@
 <html lang="fi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>S-mobiili</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#007429" />
+  <title>Suunta – Talousvalmentaja</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="phone-shell">
 
     <!-- ================================================================
-         1. ALOITUSNÄKYMÄ: Asiakasluokan valinta ennen varsinaista demoa
+         1. ALOITUSNÄKYMÄ: Vain tiedostomuotoisen tiliotteen tuonti
          ================================================================ -->
-    <div id="personaGate" class="gate-screen">
+    <div id="statementGate" class="gate-screen">
       <div class="gate-header">
         <div class="gate-logo">S</div>
-        <h1>Valitse tarkasteltava asiakasprofiili</h1>
-        <p>Tutustu miten S-AI mukautuu eri elämäntilanteisiin, tai tuo oma synteettinen Excel-tiliote.</p>
+        <h1>Lisää tiedostomuotoinen tiliote</h1>
+        <p>Tuo tiliote (.xlsx tai .csv) simuloidaksesi pankkitapahtumien lukemisen. Suunta laskee kolmen korin käyttövarasi ja neuvoo talouspäätöksissä.</p>
       </div>
 
       <div class="persona-list">
-        <button class="persona-card" onclick="selectPersona('CUST_ONNI')">
-          <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-          </div>
-          <div class="persona-info">
-            <strong>1. Onni Opiskelija</strong>
-            <span>23 v · Opintotuki &amp; osa-aikatyö · Pieni puskuri</span>
-          </div>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-
-        <button class="persona-card" onclick="selectPersona('CUST_ENNI')">
-          <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </div>
-          <div class="persona-info">
-            <strong>2. Enni Eläkeläinen</strong>
-            <span>71 v · Eläke &amp; vakaat menot · Terveys &amp; arki</span>
-          </div>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-
-        <button class="persona-card" onclick="selectPersona('CUST_ANNI')">
-          <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-          </div>
-          <div class="persona-info">
-            <strong>3. Anni Asiantuntija</strong>
-            <span>31 v · Työssäkäyvä · Säästötavoitteet &amp; arki</span>
-          </div>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-
-        <!-- 4. Oman Excel-tiliotteen tuonti -->
         <label class="persona-card upload-card">
           <div class="persona-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
           </div>
           <div class="persona-info">
-            <strong>4. Lisää oma tiliote</strong>
-            <span>Tuo synteettinen Excel-tiliote (.xlsx)</span>
+            <strong>Valitse tiliotetiedosto laitteelta</strong>
+            <span>Tuetut tiedostot: .xlsx, .xls, .csv</span>
           </div>
-          <input type="file" id="gateExcelInput" accept=".xlsx" hidden onchange="uploadExcelFromGate(this)" />
+          <input type="file" id="gateStatementInput" accept=".xlsx,.xls,.csv" hidden onchange="uploadStatementFromGate(this)" />
         </label>
+
+        <a class="persona-card sample-download" href="/api/sample-statement" download="mallitiliote.csv">
+          <div class="persona-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+          </div>
+          <div class="persona-info">
+            <strong>Lataa mallitiliote (.csv)</strong>
+            <span>Valmis testitiedosto (sample_transactions.csv) puhelimeen</span>
+          </div>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </a>
       </div>
+
+      <p class="gate-hint">
+        Tunnistetut sarakkeet: Kirjauspäivä · Saaja/Maksaja · Summa · Kategoria · Saldo
+      </p>
       <div id="gateStatus" class="gate-status"></div>
     </div>
 
     <!-- ================================================================
-         2. VARSINAINEN S-MOBIILI + S-AI KÄYTTÖLIITTYMÄ
+         2. VARSINAINEN KÄYTTÖLIITTYMÄ (S-mobiili + Suunta)
          ================================================================ -->
     <div id="appShell" class="app-shell hidden">
-      <!-- Yläpalkki: täsmälleen kuvankaappausten mukainen (uloskirjautuminen + puhekupla) -->
       <header class="topbar">
-        <button class="icon-btn" onclick="openPersonaGate()" title="Vaihda asiakasprofiilia">
+        <button class="icon-btn" onclick="openStatementGate()" title="Vaihda tiliotetiedostoa" aria-label="Vaihda tiliotetiedostoa">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
           </svg>
         </button>
         <div class="topbar-center">
-          <span id="activePersonaBadge" class="persona-pill hidden"></span>
+          <span id="activeStatementBadge" class="statement-label hidden"></span>
         </div>
-        <button class="icon-btn" onclick="handleChatIconClick()" title="S-AI Talousvalmentaja">
+        <button class="icon-btn" onclick="handleChatIconClick()" title="Suunta Talousvalmentaja" aria-label="Avaa Suunta-valmentaja">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
@@ -92,9 +73,8 @@
       <main class="content">
         <!-- VÄLILEHTI 1: KOTI -->
         <section id="tab-home" class="tab-panel active">
-          <!-- Yläosa valkoisella pohjalla: Perinteinen S-mobiili TAI S-AI-käyttövara -->
           <div class="hero-section">
-            <!-- A) PERINTEINEN S-MOBIILI (ennen S-AI:n aktivointia) -->
+            <!-- Perinteinen bonustalo ennen Suunnan aktivointia -->
             <div id="classicHero">
               <div class="bonus-top-title">Seuraavaan tasoon <span id="classicNextTier">58,08 €</span></div>
               <div class="bonus-sub">
@@ -128,10 +108,10 @@
               </button>
             </div>
 
-            <!-- B) S-AI ETUSIVU (kun käyttäjä on aktivoinut S-AI:n) -->
-            <div id="saiHero" class="hidden">
+            <!-- Suunta-etusivu aktivoinnin jälkeen -->
+            <div id="suuntaHero" class="hidden">
               <div class="bonus-top-title">Viikon jäljellä oleva käyttövara</div>
-              <div class="bonus-sub" id="dailyHint">Turvallinen päivävara ~36,00 € / pv</div>
+              <div class="bonus-sub" id="dailyHint">Turvallinen päivävara ~0,00 € / pv</div>
 
               <div class="bonus-stage">
                 <div class="tier-row tier-mid single-house">
@@ -151,25 +131,21 @@
               </button>
             </div>
 
-            <!-- Karusellipisteet -->
             <div class="dots">
               <span class="dot active" id="dot1"></span>
               <span class="dot" id="dot2"></span>
             </div>
           </div>
 
-          <!-- Pehmeänvihreä alaosa -->
           <div class="mint-surface">
-            <!-- Kutsukortti S-AI:n aktivointiin (näkyy perinteisessä tilassa) -->
-            <div id="saiBannerCard" class="card sai-invite-card">
-              <div class="sai-invite-text">
-                <strong>Ota S-AI Talousvalmentaja käyttöön</strong>
+            <div id="suuntaBannerCard" class="card suunta-invite-card">
+              <div class="suunta-invite-text">
+                <strong>Ota Suunta-talousvalmentaja käyttöön</strong>
                 <span>Näe viikoittainen käyttövarasi ja suunnittele hankintoja tekoälyn kanssa.</span>
               </div>
               <button class="btn-primary btn-sm" onclick="openActivatePrompt()">Aktivoi</button>
             </div>
 
-            <!-- Pikatoiminnot: 3 vihreää ympyrää -->
             <div id="classicQuickActions" class="quick-actions">
               <button class="qa-item" onclick="openActivatePrompt()">
                 <span class="qa-circle">
@@ -191,7 +167,7 @@
               </button>
             </div>
 
-            <div id="saiQuickActions" class="quick-actions hidden">
+            <div id="suuntaQuickActions" class="quick-actions hidden">
               <button class="qa-item" onclick="askPreset('Haluan ostaa 1 200 € läppärin')">
                 <span class="qa-circle">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -212,7 +188,6 @@
               </button>
             </div>
 
-            <!-- Tilit ja kortit -kortti -->
             <h2 class="section-title">Tilit ja kortit</h2>
             <div class="card">
               <div class="row-between">
@@ -222,7 +197,7 @@
                     <div class="item-title">S-Tili</div>
                   </div>
                 </div>
-                <strong class="amount-green" id="accountBalance">853,34 €</strong>
+                <strong class="amount-green" id="accountBalance">0,00 €</strong>
               </div>
 
               <div id="cardDetailsBlock">
@@ -243,7 +218,6 @@
               <button class="center-link" id="toggleDetailsBtn" onclick="toggleCardDetails()">Piilota tiedot</button>
             </div>
 
-            <!-- Kuitit-kortti -->
             <div class="row-between section-header">
               <h2 class="section-title">Kuitit</h2>
               <button class="link-btn" onclick="switchTab('bank')">Avaa</button>
@@ -257,12 +231,12 @@
           <h2 class="section-title">S-Etukortti &amp; Bonus</h2>
           <div class="card">
             <div class="item-title">Kuukauden S-ryhmän ostot</div>
-            <p class="item-sub">Keskittämällä kerrytät Bonusta 0,5 % – 5 %. S-AI voi hyödyntää jatkossa tuotetason kuittitietoja suositusten tarkentamiseen.</p>
+            <p class="item-sub">Keskittämällä kerrytät Bonusta 0,5 % – 5 %. Suunta voi hyödyntää kuittitietoja suositusten tarkentamiseen.</p>
           </div>
           <div class="card" id="etukorttiReceipts"></div>
         </section>
 
-        <!-- VÄLILEHTI 3: PANKKI (3 kulutuskoria + tapahtumat) -->
+        <!-- VÄLILEHTI 3: PANKKI -->
         <section id="tab-bank" class="tab-panel mint-full">
           <h2 class="section-title">Kolme kulutuskoria (30 pv)</h2>
           <div class="card" id="basketsCard"></div>
@@ -274,43 +248,43 @@
           <div class="card" id="allReceiptsCard"></div>
         </section>
 
-        <!-- VÄLILEHTI 4: MINÄ (Profiili, S-AI asetus, Excel-tuonti) -->
+        <!-- VÄLILEHTI 4: MINÄ -->
         <section id="tab-me" class="tab-panel mint-full">
-          <h2 class="section-title">Oma profiili</h2>
+          <h2 class="section-title">Ladattu tiliote</h2>
           <div class="card" id="meProfileCard"></div>
 
-          <h2 class="section-title">S-AI Talousvalmentaja</h2>
+          <h2 class="section-title">Suunta-talousvalmentaja</h2>
           <div class="card">
             <div class="row-between">
               <div>
-                <div class="item-title">Henkilökohtainen S-AI-näkymä</div>
-                <div class="item-sub">Korvaa etusivun saldon viikon käyttövaralla</div>
+                <div class="item-title">Henkilökohtainen Suunta-näkymä</div>
+                <div class="item-sub">Näytä etusivulla viikoittainen käyttövara</div>
               </div>
-              <button class="btn-primary btn-sm" id="meToggleSaiBtn" onclick="toggleSaiMode()">Aktivoi</button>
+              <button class="btn-primary btn-sm" id="meToggleSuuntaBtn" onclick="toggleSuuntaMode()">Aktivoi</button>
             </div>
             <div class="divider"></div>
             <button class="center-link" onclick="openOnboarding()">Muokkaa omia arvoja &amp; tavoitetta</button>
           </div>
 
-          <h2 class="section-title">Tuo oma Excel-tiliote</h2>
+          <h2 class="section-title">Tuo uusi tiliotetiedosto</h2>
           <div class="card">
-            <p class="item-sub" style="margin-top:0;">Valitse <code>.xlsx</code>-tiedosto (esim. Kirjauspäivä, Saaja/Maksaja, Summa, Kategoria).</p>
-            <input type="file" id="excelFileInput" accept=".xlsx" class="file-input" />
-            <button class="btn-primary full-width" onclick="uploadExcelFromMe()">Lataa tiliote (.xlsx)</button>
-            <div id="excelStatus" class="item-sub" style="margin-top:8px;"></div>
+            <p class="item-sub" style="margin-top:0;">Valitse <code>.xlsx</code>-, <code>.xls</code>- tai <code>.csv</code>-tiedosto.</p>
+            <input type="file" id="meStatementInput" accept=".xlsx,.xls,.csv" class="file-input" />
+            <button class="btn-primary full-width" onclick="uploadStatementFromMe()">Lataa tiliote</button>
+            <div id="meUploadStatus" class="item-sub" style="margin-top:8px;"></div>
           </div>
 
-          <button class="btn-secondary full-width" onclick="openPersonaGate()">Vaihda asiakasprofiilia</button>
+          <button class="btn-secondary full-width" onclick="resetDemoSession()">Nollaa demo ja valitse uusi tiedosto</button>
         </section>
 
-        <!-- S-AI VALMENTAJA -NÄKYMÄ (Aukeaa yläkulman puhekuplasta tai pikatoiminnosta) -->
+        <!-- SUUNTA-KESKUSTELU -->
         <section id="tab-chat" class="tab-panel">
           <div class="chat-header-banner">
             <button class="back-btn" onclick="switchTab('home')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
               <span>Takaisin</span>
             </button>
-            <strong>Urho S-AI</strong>
+            <strong>Suunta</strong>
             <span class="chat-status">Talousvalmentaja</span>
           </div>
           <div class="chat-chips">
@@ -327,7 +301,6 @@
         </section>
       </main>
 
-      <!-- Alavalikko: täsmälleen S-mobiilin 4 kuvaketta -->
       <nav class="bottom-nav">
         <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3l9-8z"/></svg>
@@ -348,24 +321,20 @@
       </nav>
     </div>
 
-    <!-- ================================================================
-         MODAALI 1: S-AI:n aktivointikysymys
-         ================================================================ -->
-    <div id="activateSaiModal" class="modal hidden">
+    <!-- MODAALI 1: Suunnan aktivointikysymys -->
+    <div id="activateSuuntaModal" class="modal hidden">
       <div class="modal-card">
-        <div class="modal-house-badge">S-AI</div>
-        <h3>Haluatko ottaa käyttöön henkilökohtaisen S-AI-talousvalmentajan?</h3>
-        <p>S-AI analysoi tulosi ja menosi kolmeen koriin, laskee viikoittaisen käyttövarasi ja auttaa suunnittelemaan hankintoja arvojesi pohjalta.</p>
+        <div class="modal-house-badge">Suunta</div>
+        <h3>Haluatko ottaa käyttöön henkilökohtaisen Suunta-talousvalmentajan?</h3>
+        <p>Suunta analysoi tiliotteesi kolmeen koriin, laskee viikoittaisen käyttövarasi ja auttaa suunnittelemaan hankintoja arvojesi pohjalta.</p>
         <div class="modal-actions-col">
-          <button class="btn-primary full-width" onclick="proceedToOnboarding()">Ota S-AI käyttöön</button>
-          <button class="btn-secondary full-width" onclick="declineSaiActivation()">Jatka perinteisessä S-mobiilissa</button>
+          <button class="btn-primary full-width" onclick="proceedToOnboarding()">Ota Suunta käyttöön</button>
+          <button class="btn-secondary full-width" onclick="declineSuuntaActivation()">Jatka perinteisessä S-mobiilissa</button>
         </div>
       </div>
     </div>
 
-    <!-- ================================================================
-         MODAALI 2: Henkilökohtainen käyttöönotto (arvot & tavoite)
-         ================================================================ -->
+    <!-- MODAALI 2: Käyttöönotto -->
     <div id="onboardingModal" class="modal hidden">
       <div class="modal-card">
         <h3>Rakennetaan taloussuunnitelmasi</h3>
@@ -376,10 +345,10 @@
           <label><input type="checkbox" value="Matkustaminen" /> Matkustaminen</label>
         </div>
         <label class="field-label">Kuukausittainen säästötavoite (€)</label>
-        <input type="number" id="savingsInput" value="250" min="0" step="25" />
+        <input type="number" id="savingsInput" value="200" min="0" step="25" />
         <div class="modal-actions">
           <button class="btn-secondary" onclick="closeOnboarding()">Peruuta</button>
-          <button class="btn-primary" onclick="saveOnboarding()">Aktivoi S-AI-näkymä</button>
+          <button class="btn-primary" onclick="saveOnboarding()">Aktivoi Suunta</button>
         </div>
       </div>
     </div>

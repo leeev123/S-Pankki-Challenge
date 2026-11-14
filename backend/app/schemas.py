@@ -1,27 +1,27 @@
-from typing import Any, Literal
+from typing import Any
 from pydantic import BaseModel, Field
 
 
 class OnboardingRequest(BaseModel):
-    """Käyttöönotossa lähetettävät käyttäjän arvot, leikkauskohteet ja S-AI:n aktivointitila."""
-    customer_id: str = "CUST_ANNI"
-    s_ai_enabled: bool = True
+    """Käyttöönotossa lähetettävät käyttäjän arvot, leikkauskohteet ja Suunnan aktivointitila."""
+    statement_id: str = "DEMO_TILIOTE"
+    suunta_enabled: bool = True
     monthly_income_eur: float | None = None
     priorities: list[str] = Field(default_factory=lambda: ["Laadukas arkiruoka", "Säästäminen"])
     cut_from: list[str] = Field(default_factory=lambda: ["Kahvilat", "Noutoruoka"])
-    savings_goal_name: str = "Puskuri & Läppäri"
-    savings_goal_monthly_eur: float = 250.0
+    savings_goal_name: str = "Puskuri & Tavoite"
+    savings_goal_monthly_eur: float = 200.0
 
 
 class ChatRequest(BaseModel):
-    """Käyttäjän chat-viesti backendille."""
-    customer_id: str = "CUST_ANNI"
+    """Käyttäjän chat-viesti pääkoodille."""
+    statement_id: str = "DEMO_TILIOTE"
     message: str
 
 
 class ApplyPlanRequest(BaseModel):
-    """Kun käyttäjä hyväksyy AI:n ehdottaman budjettivaihtoehdon."""
-    customer_id: str = "CUST_ANNI"
+    """Kun käyttäjä hyväksyy Suunnan ehdottaman budjettivaihtoehdon."""
+    statement_id: str = "DEMO_TILIOTE"
     plan_id: str
     title: str
     monthly_savings_delta_eur: float = 0.0

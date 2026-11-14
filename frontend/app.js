@@ -1,45 +1,56 @@
-// Aktiivinen asiakasprofiili (valitaan aloitusruudusta)
-let currentCustomerId = null;
+function getStatementSessionId() {
+  const key = "suunta_statement_id";
+  let id = localStorage.getItem(key);
+  if (!id || !/^[a-zA-Z0-9_-]{4,40}$/.test(id)) {
+    id = "stmt_" + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
+const currentStatementId = getStatementSessionId();
 let currentSnapshot = null;
 let detailsVisible = true;
 
-// Muotoilee luvun suomalaiseen muotoon: 853.34 -> "853,34 €"
-const fmtEur = (n) => Number(n).toFixed(2).replace(".", ",") + " €";
+const fmtEur = (n) => Number(n || 0).toFixed(2).replace(".", ",") + " €";
 
-// --- 1. ALOITUSNÄKYMÄ (Asiakasluokan valinta) ---
-async function selectPersona(customerId) {
-  currentCustomerId = customerId;
-  document.getElementById("personaGate").classList.add("hidden");
-  document.getElementById("appShell").classList.remove("hidden");
-  await loadState();
+window.addEventListener("DOMContentLoaded", async () => {
+  const res = await fetch(`/api/state/${currentStatementId}`);
+  const data = await res.json();
+  currentSnapshot = data.snapshot;
 
-  // Jos S-AI ei ole vielä aktivoitu tälle profiilille, näytetään aktivointikysymys
-  if (!currentSnapshot.profile.s_ai_enabled) {
-    openActivatePrompt();
+  if (currentSnapshot.has_uploaded_statement) {
+    document.getElementById("statementGate").classList.add("hidden");
+    document.getElementById("appShell").classList.remove("hidden");
+    renderSnapshot(data.snapshot);
+    renderHistory(data.history);
   }
-}
+});
 
-function openPersonaGate() {
+function openStatementGate() {
   document.getElementById("appShell").classList.add("hidden");
-  document.getElementById("personaGate").classList.remove("hidden");
+  document.getElementById("statementGate").classList.remove("hidden");
 }
 
-// Oman Excelin lataus suoraan aloitusvalikosta ("4. Lisää oma tiliote")
-async function uploadExcelFromGate(input) {
+async function uploadStatementFromGate(input) {
   if (!input.files.length) return;
   const statusEl = document.getElementById("gateStatus");
   statusEl.textContent = "Ladataan ja analysoidaan tiliotetta...";
 
-  const ok = await uploadExcelFile("CUST_CUSTOM", input.files[0], statusEl);
+  const ok = await uploadStatementFile(input.files[0], statusEl);
+  input.value = "";
   if (ok) {
-    await selectPersona("CUST_CUSTOM");
+    document.getElementById("statementGate").classList.add("hidden");
+    document.getElementById("appShell").classList.remove("hidden");
+    await loadState();
+    if (!currentSnapshot.profile.suunta_enabled) {
+      openActivatePrompt();
+    }
   }
 }
 
-// --- 2. TILAN HAKU JA PIIRTÄMINEN ---
 async function loadState() {
-  if (!currentCustomerId) return;
-  const res = await fetch(`/api/state/${currentCustomerId}`);
+  const res = await fetch(`/api/state/${currentStatementId}`);
   const data = await res.json();
   currentSnapshot = data.snapshot;
   renderSnapshot(data.snapshot);
@@ -48,75 +59,65 @@ async function loadState() {
 
 function renderSnapshot(s) {
   const p = s.profile || {};
-  const saiEnabled = Boolean(p.s_ai_enabled);
+  const suuntaEnabled = Boolean(p.suunta_enabled);
 
-  // Yläpalkin hillitty profiilitieto
-  const badge = document.getElementById("activePersonaBadge");
-  badge.textContent = p.display_name || s.customer_id;
+  const badge = document.getElementById("activeStatementBadge");
+  badge.textContent = s.source_name || "Tuotu tiliote";
   badge.classList.remove("hidden");
 
-  // Vaihdetaan etusivun näkymä: perinteinen S-mobiili vs. S-AI-käyttövara
-  document.getElementById("classicHero").classList.toggle("hidden", saiEnabled);
-  document.getElementById("classicQuickActions").classList.toggle("hidden", saiEnabled);
-  document.getElementById("saiBannerCard").classList.toggle("hidden", saiEnabled);
+  document.getElementById("classicHero").classList.toggle("hidden", suuntaEnabled);
+  document.getElementById("classicQuickActions").classList.toggle("hidden", suuntaEnabled);
+  document.getElementById("suuntaBannerCard").classList.toggle("hidden", suuntaEnabled);
 
-  document.getElementById("saiHero").classList.toggle("hidden", !saiEnabled);
-  document.getElementById("saiQuickActions").classList.toggle("hidden", !saiEnabled);
-  document.getElementById("dot1").classList.toggle("active", !saiEnabled);
-  document.getElementById("dot2").classList.toggle("active", saiEnabled);
+  document.getElementById("suuntaHero").classList.toggle("hidden", !suuntaEnabled);
+  document.getElementById("suuntaQuickActions").classList.toggle("hidden", !suuntaEnabled);
+  document.getElementById("dot1").classList.toggle("active", !suuntaEnabled);
+  document.getElementById("dot2").classList.toggle("active", suuntaEnabled);
 
-  // Perinteisen näkymän bonusluvut
   document.getElementById("classicBonusAmount").textContent = fmtEur(p.bonus_eur || 6.84);
   document.getElementById("classicNextTier").textContent = fmtEur(p.bonus_next_tier_eur || 58.08);
 
-  // S-AI-näkymän käyttövaraluvut
   document.getElementById("weeklySafeAmount").textContent = fmtEur(s.weekly_safe_to_spend_eur);
   document.getElementById("dailyHint").textContent = `Turvallinen päivävara ~${fmtEur(s.daily_safe_to_spend_eur)} / pv`;
   const goal = p.active_goal;
   document.getElementById("goalCaption").textContent = goal
     ? `Tavoite: ${goal.name} (${goal.target_eur} €)`
-    : `Katso 3 kulutuskoria & budjetti`;
+    : "Katso 3 kulutuskoria & budjetti";
 
-  // Tilit ja kortit
   document.getElementById("accountBalance").textContent = detailsVisible ? fmtEur(s.account_balance_eur) : "••• €";
 
-  // Kuitit Koti-näkymässä (ensimmäinen kuitti täsmälleen S-mobiilin tyyliin)
   const firstTx = (s.recent_transactions || [])[0];
   document.getElementById("homeReceiptCard").innerHTML = firstTx
     ? renderReceiptRow(firstTx)
-    : `<div class="item-sub">Ei vielä kuitteja</div>`;
+    : `<div class="item-sub">Ei vielä tapahtumia</div>`;
 
-  // Kaikki kuitit Pankki- ja S-Etukortti-välilehdillä
   const allReceiptsHtml = (s.recent_transactions || []).map(renderReceiptRow).join('<div class="divider"></div>');
   document.getElementById("allReceiptsCard").innerHTML = allReceiptsHtml;
   document.getElementById("etukorttiReceipts").innerHTML = allReceiptsHtml;
 
-  // Pankki-välilehden 3 koria
   const b = s.baskets_30d;
   document.getElementById("basketsCard").innerHTML = `
-    <div class="row-between"><span class="item-title">1. Välttämättömät säännölliset</span><strong>${fmtEur(b.mandatory_regular_eur)}</strong></div>
+    <div class="row-between"><span class="item-title">1. Välttämättömät säännölliset</span><strong class="nowrap">${fmtEur(b.mandatory_regular_eur)}</strong></div>
     <div class="divider"></div>
-    <div class="row-between"><span class="item-title">2. Välttämättömät epäsäännölliset (puskuri)</span><strong>${fmtEur(b.irregular_reserve_eur)}</strong></div>
+    <div class="row-between"><span class="item-title">2. Välttämättömät epäsäännölliset (puskuri)</span><strong class="nowrap">${fmtEur(b.irregular_reserve_eur)}</strong></div>
     <div class="divider"></div>
-    <div class="row-between"><span class="item-title">3. Arjen käyttöbudjetti (30 pv)</span><strong>${fmtEur(b.monthly_everyday_budget_eur)}</strong></div>
+    <div class="row-between"><span class="item-title">3. Arjen käyttöbudjetti (30 pv)</span><strong class="nowrap">${fmtEur(b.monthly_everyday_budget_eur)}</strong></div>
     <div class="divider"></div>
-    <div class="row-between"><span class="item-title">Säästötavoite / kk</span><strong class="amount-green">${fmtEur(b.monthly_savings_target_eur)}</strong></div>
+    <div class="row-between"><span class="item-title">Säästötavoite / kk</span><strong class="amount-green nowrap">${fmtEur(b.monthly_savings_target_eur)}</strong></div>
   `;
 
-  // Kategoriat
   const cats = Object.entries(s.everyday_categories_30d || {});
   document.getElementById("categoriesCard").innerHTML = cats.length
-    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${k}</span><strong>${fmtEur(v)}</strong></div>`).join("")
+    ? cats.map(([k, v]) => `<div class="row-between" style="padding:5px 0;"><span>${k}</span><strong class="nowrap">${fmtEur(v)}</strong></div>`).join("")
     : `<div class="item-sub">Ei arjen tapahtumia</div>`;
 
-  // Minä-välilehden kortit
   document.getElementById("meProfileCard").innerHTML = `
-    <div class="item-title">${p.display_name || s.customer_id}</div>
-    <div class="item-sub">${p.role_label || ""} · Kuukausitulot ${fmtEur(s.monthly_income_eur)}</div>
+    <div class="item-title">${s.source_name || "Tuotu tiliote"}</div>
+    <div class="item-sub">${s.transaction_count} tapahtumaa · Kuukausitulot ${fmtEur(s.monthly_income_eur)}</div>
     <div class="divider"></div>
     <div class="item-sub">Tärkeät asiat: ${(p.priorities || []).join(", ")}</div>
   `;
-  document.getElementById("meToggleSaiBtn").textContent = saiEnabled ? "Poista käytöstä" : "Aktivoi";
+  document.getElementById("meToggleSuuntaBtn").textContent = suuntaEnabled ? "Poista käytöstä" : "Aktivoi";
 }
 
 function renderReceiptRow(tx) {
@@ -131,26 +132,25 @@ function renderReceiptRow(tx) {
           <div class="item-sub">${tx.date}</div>
         </div>
       </div>
-      <strong style="color:${tx.amount_eur > 0 ? "#007429" : "#18241d"}">${fmtEur(Math.abs(tx.amount_eur))}</strong>
+      <strong class="nowrap" style="color:${tx.amount_eur > 0 ? "#007429" : "#18241d"}">${fmtEur(tx.amount_eur)}</strong>
     </div>`;
 }
 
-// --- 3. S-AI AKTIVOINTI & KÄYTTÖÖNOTTO ---
 function openActivatePrompt() {
-  document.getElementById("activateSaiModal").classList.remove("hidden");
+  document.getElementById("activateSuuntaModal").classList.remove("hidden");
 }
 
-function declineSaiActivation() {
-  document.getElementById("activateSaiModal").classList.add("hidden");
+function declineSuuntaActivation() {
+  document.getElementById("activateSuuntaModal").classList.add("hidden");
 }
 
 function proceedToOnboarding() {
-  document.getElementById("activateSaiModal").classList.add("hidden");
+  document.getElementById("activateSuuntaModal").classList.add("hidden");
   openOnboarding();
 }
 
 function openOnboarding() {
-  if (currentSnapshot?.profile?.monthly_savings_target_eur) {
+  if (currentSnapshot?.profile?.monthly_savings_target_eur !== undefined) {
     document.getElementById("savingsInput").value = currentSnapshot.profile.monthly_savings_target_eur;
   }
   document.getElementById("onboardingModal").classList.remove("hidden");
@@ -162,13 +162,13 @@ function closeOnboarding() {
 
 async function saveOnboarding() {
   const priorities = Array.from(document.querySelectorAll("#priorityChecks input:checked")).map((i) => i.value);
-  const savings = Number(document.getElementById("savingsInput").value || 250);
+  const savings = Number(document.getElementById("savingsInput").value || 200);
   await fetch("/api/onboarding", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      customer_id: currentCustomerId,
-      s_ai_enabled: true,
+      statement_id: currentStatementId,
+      suunta_enabled: true,
       priorities,
       savings_goal_monthly_eur: savings,
     }),
@@ -178,29 +178,28 @@ async function saveOnboarding() {
   switchTab("home");
 }
 
-async function toggleSaiMode() {
-  const nextState = !Boolean(currentSnapshot?.profile?.s_ai_enabled);
+async function toggleSuuntaMode() {
+  const nextState = !Boolean(currentSnapshot?.profile?.suunta_enabled);
   if (nextState) {
     openActivatePrompt();
     return;
   }
-  await fetch(`/api/toggle-sai/${currentCustomerId}?enabled=false`, { method: "POST" });
+  await fetch(`/api/toggle-suunta/${currentStatementId}?enabled=false`, { method: "POST" });
   await loadState();
 }
 
 function handleChatIconClick() {
-  if (!currentSnapshot?.profile?.s_ai_enabled) {
+  if (!currentSnapshot?.profile?.suunta_enabled) {
     openActivatePrompt();
   } else {
     switchTab("chat");
   }
 }
 
-// --- 4. CHAT & HANKINTASUUNNITTELU ---
 function renderHistory(history) {
   const el = document.getElementById("chatMessages");
   if (!history.length) {
-    el.innerHTML = `<div class="msg assistant">Moikka! Olen Urho, S-AI-talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>`;
+    el.innerHTML = `<div class="msg assistant">Moikka! Olen Suunta, henkilökohtainen talousvalmentajasi. Kysy viikon käyttövarastasi tai kokeile hankinnan suunnittelua (esim. "Haluan ostaa 1 200 € läppärin").</div>`;
     return;
   }
   el.innerHTML = history
@@ -226,7 +225,7 @@ async function sendMessage(text) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ customer_id: currentCustomerId, message: text }),
+    body: JSON.stringify({ statement_id: currentStatementId, message: text }),
   });
   const data = await res.json();
   renderSnapshot(data.updated_state);
@@ -237,7 +236,7 @@ async function applyPlan(card) {
   const res = await fetch("/api/apply-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ customer_id: currentCustomerId, ...card }),
+    body: JSON.stringify({ statement_id: currentStatementId, ...card }),
   });
   const data = await res.json();
   renderSnapshot(data.snapshot);
@@ -245,36 +244,39 @@ async function applyPlan(card) {
   switchTab("home");
 }
 
-// --- 5. EXCEL-TUONTI ---
-async function uploadExcelFile(targetCustId, file, statusEl) {
+async function uploadStatementFile(file, statusEl) {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`/api/upload-excel/${targetCustId}`, { method: "POST", body: formData });
+  const res = await fetch(`/api/upload-statement/${currentStatementId}`, { method: "POST", body: formData });
   if (!res.ok) {
     const err = await res.json();
     statusEl.textContent = `Virhe: ${err.detail}`;
     return false;
   }
-  statusEl.textContent = "Excel-tiliote ladattu!";
+  statusEl.textContent = "Tiliote ladattu!";
   return true;
 }
 
-async function uploadExcelFromMe() {
-  const input = document.getElementById("excelFileInput");
-  const statusEl = document.getElementById("excelStatus");
+async function uploadStatementFromMe() {
+  const input = document.getElementById("meStatementInput");
+  const statusEl = document.getElementById("meUploadStatus");
   if (!input.files.length) {
-    statusEl.textContent = "Valitse ensin .xlsx-tiedosto.";
+    statusEl.textContent = "Valitse ensin .xlsx- tai .csv-tiedosto.";
     return;
   }
   statusEl.textContent = "Ladataan...";
-  const ok = await uploadExcelFile(currentCustomerId, input.files[0], statusEl);
+  const ok = await uploadStatementFile(input.files[0], statusEl);
   if (ok) {
     await loadState();
     switchTab("home");
   }
 }
 
-// --- 6. NAVIGOINTI ---
+async function resetDemoSession() {
+  await fetch(`/api/reset/${currentStatementId}`, { method: "POST" });
+  openStatementGate();
+}
+
 function switchTab(tabName) {
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
   document.getElementById(`tab-${tabName}`).classList.add("active");
