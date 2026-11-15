@@ -70,5 +70,4 @@ def reset_statement_state(statement_id: str) -> None:
 
 
 def reset_all_state() -> None:
-    """Tyhjentää koko app_state.json-tiedoston uloskirjautumisen yhteydessä."""
-    _save_db({"profiles": {}, "histories": {}})
+    pass

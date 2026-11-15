@@ -1,3 +1,4 @@
+let sessionId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
 let currentCustomerId = null;
 let cachedCustomers = [];
 let currentSnapshot = null;
@@ -402,12 +403,14 @@ function selectLanguage(lang) {
 
 window.addEventListener("DOMContentLoaded", async () => {
   applyStaticTranslations();
-  await fetch("/api/reset-all", { method: "POST" }).catch(() => {});
   await loadProfileGate();
 });
 
 async function logoutAndReset() {
-  await fetch("/api/reset-all", { method: "POST" }).catch(() => {});
+  if (currentCustomerId) {
+    await fetch(`/api/reset/${encodeURIComponent(currentCustomerId)}`, { method: "POST" }).catch(() => {});
+  }
+  sessionId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
   currentCustomerId = null;
   currentSnapshot = null;
   currentHistory = [];
@@ -510,7 +513,7 @@ async function loadProfileGate() {
 }
 
 async function selectProfile(customerId) {
-  currentCustomerId = customerId;
+  currentCustomerId = `${customerId}::${sessionId}`;
   detailsVisible = true;
   inviteDismissed = false;
   deficitFollowupDismissed = false;

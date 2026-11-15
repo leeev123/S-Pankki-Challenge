@@ -88,7 +88,7 @@ def list_customers() -> list[dict[str, Any]]:
 
 
 def get_customer_info(customer_id: str) -> dict[str, Any]:
-    target = str(customer_id).strip()
+    target = str(customer_id).split("::")[0].strip()
     for cust in list_customers():
         if cust["customer_id"] == target:
             return cust
@@ -97,7 +97,7 @@ def get_customer_info(customer_id: str) -> dict[str, Any]:
 
 @lru_cache(maxsize=16)
 def load_statement_transactions(statement_id: str = "CUST_STUDENT_01") -> tuple[pd.DataFrame, str]:
-    target = str(statement_id).strip()
+    target = str(statement_id).split("::")[0].strip()
     get_customer_info(target)
     all_tx = _load_all_transactions()
     df = all_tx[all_tx["customer_id"] == target].copy()
@@ -131,8 +131,9 @@ def _weekly_to_monthly_cents(weekly_cents: int) -> int:
 
 def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, Any]:
     target = str(statement_id).strip()
-    cust_info = get_customer_info(target)
-    df, source_name = load_statement_transactions(target)
+    base_cid = target.split("::")[0].strip()
+    cust_info = get_customer_info(base_cid)
+    df, source_name = load_statement_transactions(base_cid)
 
     profile = dict(get_profile(target))
     profile["statement_id"] = target
