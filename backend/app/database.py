@@ -1,23 +1,20 @@
-import json
-from pathlib import Path
+import threading
 from typing import Any
 
-DB_PATH = Path(__file__).resolve().parents[1] / "data" / "app_state.json"
+_LOCK = threading.RLock()
+_STATE: dict[str, dict[str, Any]] = {"profiles": {}, "histories": {}}
 
 
 def _load_db() -> dict[str, Any]:
-    if not DB_PATH.exists():
-        return {"profiles": {}, "histories": {}}
-    try:
-        return json.loads(DB_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"profiles": {}, "histories": {}}
+    return _STATE
 
 
 def _save_db(data: dict[str, Any]) -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DB_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
+    with _LOCK:
+        for key in ("profiles", "histories"):
+            while len(_STATE[key]) > 500:
+                oldest = next(iter(_STATE[key]))
+                _STATE[key].pop(oldest, None)
 
 def get_profile(statement_id: str) -> dict[str, Any]:
     """Hakee profiilin tai alustaa puhtaan Suunta-oletusprofiilin."""

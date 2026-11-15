@@ -177,9 +177,11 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
 
     everyday_adj_cents = cents(profile.get("everyday_adjustment_eur", 0.0))
 
-    # 1) Määritetään arjen peruskulutustaso ennen säästötavoitetta (zero_save_everyday_c)
+    # 1) Määritetään käytettävissä oleva kuukausivara ennen säästötavoitetta (zero_save_everyday_c).
+    #    Kun tulot kattavat menot, koko kiinteiden kulujen ja varauksen jälkeinen tulo (net_before_everyday_c)
+    #    on käytettävissä arjen ja säästämisen jakamiseen (skaalautuu suoraan tulojen mukana).
     if not is_monthly_deficit:
-        zero_save_everyday_c = min(avg_everyday_c, net_before_everyday_c) if avg_everyday_c > 0 else net_before_everyday_c
+        zero_save_everyday_c = max(0, net_before_everyday_c)
     else:
         confirmed_funding_c = cents(profile.get("deficit_monthly_funding_eur", 0.0))
         if confirmed_funding_c > 0:
@@ -196,7 +198,22 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
             fallback_pool_c = max(avg_income_c, proportional(max(0, account_balance_cents), 1, 6))
             zero_save_everyday_c = max(6000, proportional(fallback_pool_c, 18, 100))
 
-    # 2) Jokainen euro säästötavoitteessa pienentää suoraan arjen kuukausi- ja viikkobudjettia kaikilla profiileilla!
+    # Lasketaan tuloihin skaalautuva suositussäästö sekä liukusäätimen maksimi (= henkilön tulot)
+    max_savings_limit_c = avg_income_c if avg_income_c > 0 else zero_save_everyday_c
+    min_wk_buffer_c = max(1500, min(15000, proportional(avg_everyday_c, 15 * 12, 100 * 52)))
+    max_safe_save_c = max(0, zero_save_everyday_c - _weekly_to_monthly_cents(spent_week_cents + min_wk_buffer_c))
+    if not is_monthly_deficit:
+        surplus_c = max(0, net_before_everyday_c - avg_everyday_c)
+        gentle_trim_c = min(
+            surplus_c + proportional(avg_everyday_c, 10, 100),
+            proportional(zero_save_everyday_c, 25, 100),
+        )
+        raw_rec_save_c = max(proportional(surplus_c, 80, 100), gentle_trim_c)
+    else:
+        raw_rec_save_c = proportional(zero_save_everyday_c, 10, 100)
+    recommended_save_c = min(max_safe_save_c, raw_rec_save_c)
+
+    # 2) Jokainen euro säästötavoitteessa pienentää suoraan arjen kuukausi- ja viikkobudjettia kaikilla profiileilla
     monthly_everyday_budget_cents = zero_save_everyday_c - savings_target_cents + everyday_adj_cents
     weekly_budget_cents = monthly_to_weekly(monthly_everyday_budget_cents)
     weekly_safe_cents = weekly_budget_cents - spent_week_cents
@@ -256,6 +273,8 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
         "is_monthly_deficit": is_monthly_deficit,
         "monthly_deficit_eur": cents_to_eur(monthly_deficit_c),
         "zero_save_everyday_monthly_eur": cents_to_eur(zero_save_everyday_c),
+        "max_monthly_savings_eur": cents_to_eur(max_savings_limit_c),
+        "recommended_monthly_savings_eur": cents_to_eur(recommended_save_c),
         "average_everyday_monthly_eur": cents_to_eur(avg_everyday_c),
         "weekly_budget_eur": cents_to_eur(weekly_budget_cents),
         "spent_this_week_eur": cents_to_eur(spent_week_cents),
@@ -344,7 +363,8 @@ def simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> di
     max_safe_cut_wk = max(3.0, math.floor(min(wk_budget * 0.28, max(4.0, wk_safe * 0.75))))
     gentle_cut_wk = max(2.0, math.floor(max_safe_cut_wk * 0.5))
 
-    if current_save_c >= 3500:
+    steady_threshold_c = max(3500, proportional(cents(wk_budget), 52 * 10, 12 * 100))
+    if current_save_c >= steady_threshold_c:
         steady_delta_w, steady_delta_m_c, steady_total_m_c = 0.0, 0, current_save_c
     else:
         steady_delta_w = -gentle_cut_wk

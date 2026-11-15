@@ -1,40 +1,4 @@
 {
-  "profiles": {
-    "CUST_STUDENT_01": {
-      "statement_id": "CUST_STUDENT_01",
-      "display_name": "Asiakas",
-      "file_name": null,
-      "suunta_enabled": false,
-      "onboarded": true,
-      "priorities": [
-        "Ruokakauppa"
-      ],
-      "cut_from": [
-        "Ravintolat",
-        "Liikkuminen"
-      ],
-      "monthly_savings_target_eur": 0.0,
-      "buffer_target_eur": 1500.0,
-      "current_buffer_eur": 850.0,
-      "everyday_adjustment_eur": 0.0,
-      "bonus_eur": 23.4,
-      "bonus_next_tier_eur": 56.7,
-      "active_goal": {
-        "name": "Säästää tavoitteeseen",
-        "target_eur": 1200.0
-      },
-      "custom_monthly_income_eur": 730.0,
-      "custom_mandatory_regular_eur": 945.0,
-      "custom_everyday_monthly_eur": 265.0
-    }
-  },
-  "histories": {
-    "CUST_STUDENT_01": [
-      {
-        "role": "assistant",
-        "content": "Huomasin lukujesi perusteella, että kuukausittaiset menot (**1245 €/kk**) ylittävät säännölliset tulot (**730 €/kk**) noin **515 eurolla** kuukaudessa. Alustava viikkobudjettisi (**30 €/vk**) on laskettu tilillä olevien varojen turvin.\n\nKerrotko lyhyesti elämäntilanteestasi ja miten rahoitat tämän erotuksen (esim. säästöt, opintolaina tai muu tuki), niin rakennetaan sinulle realistinen ja kestävä budjetti?",
-        "action_cards": []
-      }
-    ]
-  }
+  "profiles": {},
+  "histories": {}
 }

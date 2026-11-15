@@ -13,6 +13,7 @@ class OnboardingRequest(BaseModel):
     cut_from: list[str] = Field(default_factory=list)
     savings_goal_name: str = "Säästää tavoitteeseen"
     savings_goal_monthly_eur: float = 100.0
+    savings_goal_target_eur: float | None = None
 
 
 class ChatRequest(BaseModel):

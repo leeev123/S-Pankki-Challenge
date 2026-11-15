@@ -72,7 +72,12 @@ def api_state(statement_id: str):
 def api_onboarding(payload: OnboardingRequest):
     profile = get_profile(payload.statement_id)
     existing_goal = profile.get("active_goal")
-    target_eur = existing_goal.get("target_eur", 1200.0) if isinstance(existing_goal, dict) else 1200.0
+    if payload.savings_goal_target_eur is not None and payload.savings_goal_target_eur > 0:
+        target_eur = float(payload.savings_goal_target_eur)
+    elif isinstance(existing_goal, dict) and existing_goal.get("target_eur"):
+        target_eur = float(existing_goal["target_eur"])
+    else:
+        target_eur = max(300.0, round(payload.savings_goal_monthly_eur * 12, -2))
 
     updates = {
         "suunta_enabled": payload.suunta_enabled,

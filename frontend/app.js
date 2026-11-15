@@ -21,6 +21,8 @@ let wizardState = {
   protect: [],
   monthlySavings: 50,
   targetAmount: 1200,
+  savingsManuallyAdjusted: false,
+  targetManuallyAdjusted: false,
 };
 
 const SBANK_MEDIAN_EUR = 50;
@@ -133,7 +135,7 @@ const I18N = {
     monthlySaving: "Kuukausisäästö",
     wkAllowance: "Viikon käyttövara",
     perYear: "Vuodessa",
-    wizDefWarn: (r) => `Säästötahti vie viikon käyttövaran miinukselle. Suositus enintään ${r} €/kk.`,
+    wizDefWarn: (r) => `Säästötahti vie viikon käyttövaran miinukselle. Suositus enintään ${r.toLocaleString("fi-FI")} €/kk.`,
     recommendBtn: "Suositus",
     targetSum: "Tavoitesumma",
     targetFilledIn: (lbl) => `Tavoite täyttyy noin ${lbl} kuluessa.`,
@@ -141,7 +143,7 @@ const I18N = {
     bufferNow: "Puskuri nyt",
     forecast6m: (v) => `6 kk ennuste ${v}`,
     savingsGoal: "Säästötavoite",
-    approxPerWk: (w) => `noin ${w} € / vk`,
+    approxPerWk: (w) => `noin ${w.toLocaleString("fi-FI")} € / vk`,
     b1Name: "1. Kiinteät menot",
     b1Desc: "Asuminen, laskut ja sopimukset",
     b2Name: "2. Yllättävien menojen varaus",
@@ -151,12 +153,12 @@ const I18N = {
     cmpTitle: "Sinä verrattuna muihin säästäjiin",
     cmpYour: "Sinun kuukausisäästösi",
     cmpMedian: "S-Pankin asiakkaiden mediaani (31.1.2026)",
-    cmpAbove: (d) => `+${d} € yli mediaanin`,
+    cmpAbove: (d) => `+${d.toLocaleString("fi-FI")} € yli mediaanin`,
     cmpAt: "Mediaanitasolla",
-    cmpBelow: (d) => `${d} € mediaaniin`,
-    cmpNoteAbove: (d) => `Säästät kuukaudessa <strong>${d} € enemmän</strong> kuin S-Pankin asiakkaat keskimäärin (mediaani 50 €/kk, 31.1.2026).`,
+    cmpBelow: (d) => `${d.toLocaleString("fi-FI")} € mediaaniin`,
+    cmpNoteAbove: (d) => `Säästät kuukaudessa <strong>${d.toLocaleString("fi-FI")} € enemmän</strong> kuin S-Pankin asiakkaat keskimäärin (mediaani 50 €/kk, 31.1.2026).`,
     cmpNoteAt: "Kuukausisäästösi vastaa S-Pankin asiakkaiden mediaania (50 €/kk, 31.1.2026).",
-    cmpNoteBelow: (d) => `S-Pankin asiakkaiden mediaanisäästö oli <strong>50 €/kk</strong> (31.1.2026). Jo +${d} €/kk nostaa sinut mediaanitasolle.`,
+    cmpNoteBelow: (d) => `S-Pankin asiakkaiden mediaanisäästö oli <strong>50 €/kk</strong> (31.1.2026). Jo +${d.toLocaleString("fi-FI")} €/kk nostaa sinut mediaanitasolle.`,
     meCoachTitle: "Suunta-talousvalmentaja",
     meCoachSub: "Piilottaa kokonaissaldon ja näyttää viikon käyttövaran",
     meCoachOffSub: "Ota käyttöön vastaamalla muutamaan kysymykseen",
@@ -273,7 +275,7 @@ const I18N = {
     monthlySaving: "Monthly saving",
     wkAllowance: "Weekly allowance",
     perYear: "Per year",
-    wizDefWarn: (r) => `This saving pace puts your weekly allowance in deficit. Recommended max ${r} €/mo.`,
+    wizDefWarn: (r) => `This saving pace puts your weekly allowance in deficit. Recommended max ${r.toLocaleString("en-IE")} €/mo.`,
     recommendBtn: "Recommended",
     targetSum: "Target amount",
     targetFilledIn: (lbl) => `Goal reached in about ${lbl}.`,
@@ -281,7 +283,7 @@ const I18N = {
     bufferNow: "Buffer now",
     forecast6m: (v) => `6 mo forecast ${v}`,
     savingsGoal: "Savings goal",
-    approxPerWk: (w) => `approx. ${w} € / wk`,
+    approxPerWk: (w) => `approx. ${w.toLocaleString("en-IE")} € / wk`,
     b1Name: "1. Fixed expenses",
     b1Desc: "Housing, bills and contracts",
     b2Name: "2. Irregular expense reserve",
@@ -291,12 +293,12 @@ const I18N = {
     cmpTitle: "You compared to other savers",
     cmpYour: "Your monthly saving",
     cmpMedian: "S-Pankki customer median (31.1.2026)",
-    cmpAbove: (d) => `+${d} € above median`,
+    cmpAbove: (d) => `+${d.toLocaleString("en-IE")} € above median`,
     cmpAt: "At median",
-    cmpBelow: (d) => `${d} € to median`,
-    cmpNoteAbove: (d) => `You save <strong>${d} € more</strong> per month than S-Pankki customers on average (median 50 €/mo, 31.1.2026).`,
+    cmpBelow: (d) => `${d.toLocaleString("en-IE")} € to median`,
+    cmpNoteAbove: (d) => `You save <strong>${d.toLocaleString("en-IE")} € more</strong> per month than S-Pankki customers on average (median 50 €/mo, 31.1.2026).`,
     cmpNoteAt: "Your monthly saving matches the S-Pankki customer median (50 €/mo, 31.1.2026).",
-    cmpNoteBelow: (d) => `The S-Pankki customer median saving was <strong>50 €/mo</strong> (31.1.2026). Just +${d} €/mo brings you to the median.`,
+    cmpNoteBelow: (d) => `The S-Pankki customer median saving was <strong>50 €/mo</strong> (31.1.2026). Just +${d.toLocaleString("en-IE")} €/mo brings you to the median.`,
     meCoachTitle: "Suunta financial coach",
     meCoachSub: "Hides total account balance and displays weekly allowance",
     meCoachOffSub: "Enable by answering a few quick questions",
@@ -546,22 +548,87 @@ function computeZeroSaveMonthlyEveryday() {
   const isDef = wizardState.incomeEur < totalExp;
 
   if (!isDef) {
-    const netBeforeEv = wizardState.incomeEur - wizardState.fixedEur - irreg;
-    return wizardState.everydayEur > 0 ? Math.min(wizardState.everydayEur, netBeforeEv) : netBeforeEv;
+    return Math.max(0, wizardState.incomeEur - wizardState.fixedEur - irreg);
   }
+  const confirmedFunding = Number(s.profile?.deficit_monthly_funding_eur || 0);
   const bal = Number(s.account_balance_eur || 0);
-  const resMo = Math.max(0, bal - Math.min(500, bal * 0.2)) / 12;
+  const resMo = confirmedFunding > 0 ? confirmedFunding : Math.max(0, bal - Math.min(500, bal * 0.2)) / 12;
   const room = wizardState.incomeEur + resMo - wizardState.fixedEur - irreg;
   if (room > 0) return wizardState.everydayEur > 0 ? Math.min(wizardState.everydayEur, room) : room;
   return Math.max(60, Math.max(wizardState.incomeEur, bal / 6) * 0.18);
 }
 
+/* Säästöliukusäätimen maksimi on suoraan henkilön kuukausitulot (varalattiana käytettävissä oleva vara, jos tulot = 0 €) */
+function getSavingsSliderConfig() {
+  const incomeMax = Math.round(Number(wizardState.incomeEur || 0));
+  const fallbackMax = Math.max(100, Math.round(computeZeroSaveMonthlyEveryday()));
+  const max = incomeMax > 0 ? incomeMax : fallbackMax;
+
+  let step;
+  if (max < 25) step = 1;
+  else if (max <= 300) step = 5;
+  else if (max <= 1500) step = 10;
+  else if (max <= 5000) step = 25;
+  else if (max <= 15000) step = 50;
+  else if (max <= 50000) step = 100;
+  else step = 250;
+
+  return { min: 0, max, step };
+}
+
 function getRecommendedMonthlySavings() {
+  const s = currentSnapshot;
+  const irreg = Number(s?.baskets_30d?.irregular_reserve_eur || 35);
   const zeroSaveEv = computeZeroSaveMonthlyEveryday();
-  const spentWk = Number(currentSnapshot?.spent_this_week_eur || 0);
-  const maxSafeMo = Math.max(0, Math.floor((zeroSaveEv - ((spentWk + 15) * 52) / 12) / 10) * 10);
-  const gentle15Pct = Math.floor((zeroSaveEv * 0.15) / 10) * 10;
-  return Math.min(150, maxSafeMo, Math.max(0, gentle15Pct));
+  const spentWk = Number(s?.spent_this_week_eur || 0);
+  const { max: sliderMax, step } = getSavingsSliderConfig();
+
+  const minWkBuffer = Math.max(15, Math.min(150, (wizardState.everydayEur * 0.15 * 12) / 52));
+  const maxSafeMo = Math.max(0, zeroSaveEv - ((spentWk + minWkBuffer) * 52) / 12);
+
+  const totalExp = wizardState.fixedEur + irreg + wizardState.everydayEur;
+  const isDef = wizardState.incomeEur < totalExp;
+
+  let rawRec;
+  if (!isDef) {
+    const surplus = Math.max(0, zeroSaveEv - wizardState.everydayEur);
+    const gentleTrim = Math.min(surplus + wizardState.everydayEur * 0.1, zeroSaveEv * 0.25);
+    rawRec = Math.max(surplus * 0.8, gentleTrim);
+  } else {
+    rawRec = zeroSaveEv * 0.1;
+  }
+
+  const bounded = Math.min(sliderMax, maxSafeMo, Math.max(0, rawRec));
+  return Math.max(0, Math.floor(bounded / step) * step);
+}
+
+function getTargetSliderConfig(includeCurrent = true) {
+  const saveCfg = getSavingsSliderConfig();
+  const currentTarget = includeCurrent ? Number(wizardState.targetAmount || 0) : 0;
+  const rawMax = Math.max(1000, saveCfg.max * 12, currentTarget);
+
+  let min, step, roundUnit;
+  if (rawMax <= 3000) {
+    min = 50; step = 50; roundUnit = 250;
+  } else if (rawMax <= 15000) {
+    min = 50; step = 100; roundUnit = 500;
+  } else if (rawMax <= 50000) {
+    min = 250; step = 250; roundUnit = 1000;
+  } else if (rawMax <= 150000) {
+    min = 500; step = 500; roundUnit = 5000;
+  } else {
+    min = 1000; step = 1000; roundUnit = 10000;
+  }
+
+  const max = Math.ceil(rawMax / roundUnit) * roundUnit;
+  return { min, max, step };
+}
+
+function getDefaultTargetAmount(recMonthlySavings) {
+  const targetCfg = getTargetSliderConfig(false);
+  const rawTarget = Math.max(targetCfg.min, (recMonthlySavings || 50) * 12);
+  const snapped = Math.round(rawTarget / targetCfg.step) * targetCfg.step;
+  return Math.min(targetCfg.max, Math.max(targetCfg.min, snapped));
 }
 
 function initWizardDefaults(s) {
@@ -577,8 +644,18 @@ function initWizardDefaults(s) {
   wizardState.goal = p.active_goal?.name && GOAL_META.some((g) => g.id === p.active_goal.name) ? p.active_goal.name : "Säästää tavoitteeseen";
   wizardState.cutFrom = p.onboarded && Array.isArray(p.cut_from) && p.cut_from.length ? [...p.cut_from] : defaultCut;
   wizardState.protect = p.onboarded && Array.isArray(p.priorities) && p.priorities.length ? [...p.priorities] : defaultProtect;
-  wizardState.monthlySavings = p.onboarded ? Math.round(Number(b.monthly_savings_target_eur || 0)) : getRecommendedMonthlySavings();
-  wizardState.targetAmount = p.active_goal?.target_eur || 1200;
+
+  wizardState.savingsManuallyAdjusted = Boolean(p.onboarded);
+  wizardState.targetManuallyAdjusted = Boolean(p.onboarded && p.active_goal?.target_eur);
+
+  const saveCfg = getSavingsSliderConfig();
+  const recSave = getRecommendedMonthlySavings();
+  const initialSave = p.onboarded ? Math.round(Number(b.monthly_savings_target_eur || 0)) : recSave;
+  wizardState.monthlySavings = Math.min(saveCfg.max, Math.max(0, initialSave));
+
+  wizardState.targetAmount = p.active_goal?.target_eur
+    ? Math.round(Number(p.active_goal.target_eur))
+    : getDefaultTargetAmount(wizardState.monthlySavings || recSave);
 }
 
 function openOnboardingScreen(startStep = 1) {
@@ -652,8 +729,61 @@ function renderIoEditorHtml() {
     </div>`;
 }
 
+function syncSlidersToCurrentIncome(isIncomeFieldEmpty = false) {
+  const d = t();
+  const saveCfg = getSavingsSliderConfig();
+  const recMo = getRecommendedMonthlySavings();
+
+  if (!wizardState.savingsManuallyAdjusted) {
+    wizardState.monthlySavings = recMo;
+  } else if (!isIncomeFieldEmpty && wizardState.monthlySavings > saveCfg.max) {
+    wizardState.monthlySavings = saveCfg.max;
+  }
+
+  if (!wizardState.targetManuallyAdjusted) {
+    wizardState.targetAmount = getDefaultTargetAmount(wizardState.monthlySavings || recMo);
+  }
+  const targetCfg = getTargetSliderConfig(true);
+  wizardState.targetAmount = Math.min(Math.max(wizardState.targetAmount, targetCfg.min), targetCfg.max);
+
+  const saveInp = document.getElementById("wizSaveInput");
+  if (saveInp) {
+    saveInp.min = String(saveCfg.min);
+    saveInp.max = String(saveCfg.max);
+    saveInp.step = String(saveCfg.step);
+    saveInp.value = String(Math.min(saveCfg.max, wizardState.monthlySavings));
+
+    const maxLbl = document.getElementById("wizSaveMaxLabel");
+    if (maxLbl) maxLbl.textContent = `${fmtWholeEur(saveCfg.max)}${d.perMo}`;
+
+    const recBtn = document.getElementById("wizQuickRecBtn");
+    if (recBtn) {
+      recBtn.textContent = `${d.recommendBtn}: ${fmtWholeEur(recMo)}${d.perMo}`;
+      recBtn.classList.toggle("hidden", recMo === wizardState.monthlySavings);
+    }
+
+    onWizardSavingsSlide(saveInp.value, false);
+  }
+
+  const targetInp = document.getElementById("wizTargetInput");
+  if (targetInp) {
+    targetInp.min = String(targetCfg.min);
+    targetInp.max = String(targetCfg.max);
+    targetInp.step = String(targetCfg.step);
+    targetInp.value = String(wizardState.targetAmount);
+
+    const minTgtLbl = document.getElementById("wizTargetMinLabel");
+    const maxTgtLbl = document.getElementById("wizTargetMaxLabel");
+    if (minTgtLbl) minTgtLbl.textContent = fmtWholeEur(targetCfg.min);
+    if (maxTgtLbl) maxTgtLbl.textContent = fmtWholeEur(targetCfg.max);
+
+    onWizardTargetSlide(wizardState.targetAmount, false);
+  }
+}
+
 function onEditIoChange() {
-  const inc = Math.max(0, Math.round(Number(document.getElementById("editIncomeInp")?.value || 0)));
+  const incomeRaw = document.getElementById("editIncomeInp")?.value ?? "";
+  const inc = Math.max(0, Math.round(Number(incomeRaw || 0)));
   const fix = Math.max(0, Math.round(Number(document.getElementById("editFixedInp")?.value || 0)));
   const evd = Math.max(0, Math.round(Number(document.getElementById("editEverydayInp")?.value || 0)));
   wizardState.incomeEur = inc;
@@ -671,7 +801,8 @@ function onEditIoChange() {
     defNote.classList.toggle("hidden", gap <= 0);
     if (gap > 0) defNote.textContent = t().gapNotice(fmtWholeEur(gap));
   }
-  if (document.getElementById("wizWeeklyPreview")) onWizardSavingsSlide(wizardState.monthlySavings);
+
+  syncSlidersToCurrentIncome(incomeRaw === "");
 }
 
 function renderOnboardingStep() {
@@ -741,30 +872,45 @@ function renderOnboardingStep() {
         <div class="pill-grid" id="obProtectGrid">${protectPills}</div>
       </div>`;
   } else {
+    const saveCfg = getSavingsSliderConfig();
+    if (wizardState.monthlySavings > saveCfg.max) wizardState.monthlySavings = saveCfg.max;
+    const targetCfg = getTargetSliderConfig(true);
+    const recMo = getRecommendedMonthlySavings();
     const estProjSafe = computeProjectedWeeklySafe(wizardState.monthlySavings);
     const saveWk = Math.round((wizardState.monthlySavings * 12) / 52);
     const months = wizardState.monthlySavings > 0 ? Math.ceil(wizardState.targetAmount / wizardState.monthlySavings) : 0;
-    const recMo = getRecommendedMonthlySavings();
     const extraIoSection = budgetEditOnlyMode ? `<div class="ob-section-label" style="margin-top:18px;">${d.ob1Title}</div>${renderIoEditorHtml()}` : "";
 
     bodyEl.innerHTML = `
       <h2 class="ob-title">${budgetEditOnlyMode ? d.btnChangeBudget : d.ob3Title}</h2>
       <p class="ob-subtitle">${d.ob3Sub}</p>
       <div class="slider-block">
-        <div class="slider-head"><span>${d.monthlySaving}</span><strong id="wizSaveLabel" class="tabular">${wizardState.monthlySavings} €${d.perMo} (${saveWk} €${d.perWk})</strong></div>
-        <input id="wizSaveInput" type="range" class="suunta-range" min="0" max="500" step="10" value="${wizardState.monthlySavings}" oninput="onWizardSavingsSlide(this.value)" />
+        <div class="slider-head">
+          <span>${d.monthlySaving}</span>
+          <strong id="wizSaveLabel" class="tabular">${fmtWholeEur(wizardState.monthlySavings)}${d.perMo} (${fmtWholeEur(saveWk)}${d.perWk})</strong>
+        </div>
+        <input id="wizSaveInput" type="range" class="suunta-range" min="${saveCfg.min}" max="${saveCfg.max}" step="${saveCfg.step}" value="${wizardState.monthlySavings}" oninput="onWizardSavingsSlide(this.value, true)" />
+        <div class="row-between" style="font-size:11.5px;color:var(--s-muted);margin-top:2px;">
+          <span class="tabular">0 €${d.perMo}</span>
+          <button type="button" id="wizQuickRecBtn" class="btn-subtle ${recMo === wizardState.monthlySavings ? "hidden" : ""}" style="padding:2px 8px;font-size:11px;" onclick="applyRecommendedWizardSavings()">${d.recommendBtn}: ${fmtWholeEur(recMo)}${d.perMo}</button>
+          <span id="wizSaveMaxLabel" class="tabular">${fmtWholeEur(saveCfg.max)}${d.perMo}</span>
+        </div>
         <div class="slider-live-note">
-          <span>${d.wkAllowance}: <strong id="wizWeeklyPreview" class="tabular">${estProjSafe} €</strong></span>
-          <span>${d.perYear}: <strong id="wizYearlyPreview" class="tabular">+${wizardState.monthlySavings * 12} €</strong></span>
+          <span>${d.wkAllowance}: <strong id="wizWeeklyPreview" class="tabular">${fmtWholeEur(estProjSafe)}</strong></span>
+          <span>${d.perYear}: <strong id="wizYearlyPreview" class="tabular">+${fmtWholeEur(wizardState.monthlySavings * 12)}</strong></span>
         </div>
         <div id="wizDeficitWarn" class="deficit-warn-box ${estProjSafe < 0 ? "" : "hidden"}">
-          <span>${d.wizDefWarn(recMo)}</span>
-          <button type="button" class="btn-subtle" onclick="applyRecommendedWizardSavings(${recMo})">${d.recommendBtn}</button>
+          <span id="wizDeficitWarnText">${d.wizDefWarn(recMo)}</span>
+          <button type="button" class="btn-subtle" onclick="applyRecommendedWizardSavings()">${d.recommendBtn}</button>
         </div>
       </div>
       <div class="slider-block">
         <div class="slider-head"><span>${d.targetSum}</span><strong id="wizTargetLabel" class="tabular">${fmtWholeEur(wizardState.targetAmount)}</strong></div>
-        <input type="range" class="suunta-range" min="300" max="10000" step="100" value="${wizardState.targetAmount}" oninput="onWizardTargetSlide(this.value)" />
+        <input id="wizTargetInput" type="range" class="suunta-range" min="${targetCfg.min}" max="${targetCfg.max}" step="${targetCfg.step}" value="${wizardState.targetAmount}" oninput="onWizardTargetSlide(this.value, true)" />
+        <div class="row-between" style="font-size:11.5px;color:var(--s-muted);margin-top:2px;">
+          <span id="wizTargetMinLabel" class="tabular">${fmtWholeEur(targetCfg.min)}</span>
+          <span id="wizTargetMaxLabel" class="tabular">${fmtWholeEur(targetCfg.max)}</span>
+        </div>
         <div id="wizMonthsPreview" class="item-sub" style="margin-top:6px;">${months ? d.targetFilledIn(fmtMonthsLabel(months)) : d.setSavingForTime}</div>
       </div>
       ${extraIoSection}`;
@@ -808,30 +954,46 @@ function toggleCategoryPill(btnEl) {
   }
 }
 
-function applyRecommendedWizardSavings(recMo) {
+function applyRecommendedWizardSavings() {
+  const recMo = getRecommendedMonthlySavings();
   const input = document.getElementById("wizSaveInput");
   if (input) input.value = String(recMo);
-  onWizardSavingsSlide(recMo);
+  onWizardSavingsSlide(recMo, true);
 }
 
-function onWizardSavingsSlide(valRaw) {
+function onWizardSavingsSlide(valRaw, isUserInput = true) {
   const d = t();
   const val = Number(valRaw);
+  if (isUserInput) wizardState.savingsManuallyAdjusted = true;
   wizardState.monthlySavings = val;
+
+  const recMo = getRecommendedMonthlySavings();
   const projSafe = computeProjectedWeeklySafe(val);
   const saveWk = Math.round((val * 12) / 52);
   const months = val > 0 ? Math.ceil(wizardState.targetAmount / val) : 0;
 
-  document.getElementById("wizSaveLabel").textContent = `${val} €${d.perMo} (${saveWk} €${d.perWk})`;
-  document.getElementById("wizWeeklyPreview").textContent = `${projSafe} €`;
-  document.getElementById("wizYearlyPreview").textContent = `+${val * 12} €`;
-  document.getElementById("wizDeficitWarn").classList.toggle("hidden", projSafe >= 0);
+  document.getElementById("wizSaveLabel").textContent = `${fmtWholeEur(val)}${d.perMo} (${fmtWholeEur(saveWk)}${d.perWk})`;
+  document.getElementById("wizWeeklyPreview").textContent = fmtWholeEur(projSafe);
+  document.getElementById("wizYearlyPreview").textContent = `+${fmtWholeEur(val * 12)}`;
+
+  const warnBox = document.getElementById("wizDeficitWarn");
+  const warnTxt = document.getElementById("wizDeficitWarnText");
+  if (warnTxt) warnTxt.textContent = d.wizDefWarn(recMo);
+  if (warnBox) warnBox.classList.toggle("hidden", projSafe >= 0);
+
+  const recBtn = document.getElementById("wizQuickRecBtn");
+  if (recBtn) {
+    recBtn.textContent = `${d.recommendBtn}: ${fmtWholeEur(recMo)}${d.perMo}`;
+    recBtn.classList.toggle("hidden", recMo === val);
+  }
+
   document.getElementById("wizMonthsPreview").textContent = months ? d.targetFilledIn(fmtMonthsLabel(months)) : d.setSavingForTime;
 }
 
-function onWizardTargetSlide(valRaw) {
+function onWizardTargetSlide(valRaw, isUserInput = true) {
   const d = t();
   const val = Number(valRaw);
+  if (isUserInput) wizardState.targetManuallyAdjusted = true;
   wizardState.targetAmount = val;
   const months = wizardState.monthlySavings > 0 ? Math.ceil(val / wizardState.monthlySavings) : 0;
   document.getElementById("wizTargetLabel").textContent = fmtWholeEur(val);
@@ -856,6 +1018,7 @@ async function finishWizard() {
       cut_from: wizardState.cutFrom,
       savings_goal_name: wizardState.goal,
       savings_goal_monthly_eur: wizardState.monthlySavings,
+      savings_goal_target_eur: wizardState.targetAmount,
     }),
   });
   document.getElementById("onboardingScreen").classList.add("hidden");
@@ -867,13 +1030,14 @@ async function finishWizard() {
 function openGoalEditor() {
   if (!currentSnapshot) return;
   const p = currentSnapshot.profile || {};
-  const curSaveMo = Number(currentSnapshot.baskets_30d?.monthly_savings_target_eur || 50);
+  const curSaveMo = Number(currentSnapshot.baskets_30d?.monthly_savings_target_eur || currentSnapshot.recommended_monthly_savings_eur || 50);
   const defaultName = currentLang === "en" ? "Savings goal" : "Säästötavoite";
-  const goal = p.active_goal || { name: defaultName, target_eur: 1200 };
+  const fallbackTarget = Math.max(300, Math.round((curSaveMo * 12) / 100) * 100);
+  const goal = p.active_goal || { name: defaultName, target_eur: fallbackTarget };
   const initMonths = curSaveMo > 0 ? Math.min(120, Math.max(1, Math.round(goal.target_eur / curSaveMo))) : 24;
 
   document.getElementById("geNameInput").value = trGoal(goal.name || defaultName);
-  document.getElementById("geTargetInput").value = Math.round(goal.target_eur || 1200);
+  document.getElementById("geTargetInput").value = Math.round(goal.target_eur || fallbackTarget);
   document.getElementById("geMonthsRange").value = String(initMonths);
   onGoalEditorChange();
   document.getElementById("goalEditorModal").classList.remove("hidden");
@@ -890,12 +1054,13 @@ function onGoalEditorChange() {
   const months = Number(document.getElementById("geMonthsRange").value || 24);
   const reqMo = target / months;
   const reqWk = (reqMo * 12) / 52;
-  const zeroSaveEv = Number(currentSnapshot.zero_save_everyday_monthly_eur || currentSnapshot.average_everyday_monthly_eur || 400);
+  const adj = Number(currentSnapshot.profile?.everyday_adjustment_eur || 0);
+  const zeroSaveEv = Number(currentSnapshot.zero_save_everyday_monthly_eur || currentSnapshot.average_everyday_monthly_eur || 400) + adj;
   const newWkBudget = Math.round(((zeroSaveEv - reqMo) * 12) / 52);
 
   document.getElementById("geMonthsLabel").textContent = fmtMonthsLabel(months);
-  document.getElementById("geRatePreview").textContent = `${Math.round(reqWk)} €${d.perWk} (${Math.round(reqMo)} €${d.perMo})`;
-  document.getElementById("geWeeklyPreview").textContent = `${newWkBudget} €${d.perWk}`;
+  document.getElementById("geRatePreview").textContent = `${fmtWholeEur(reqWk)}${d.perWk} (${fmtWholeEur(reqMo)}${d.perMo})`;
+  document.getElementById("geWeeklyPreview").textContent = `${fmtWholeEur(newWkBudget)}${d.perWk}`;
 }
 
 async function saveEditedGoal() {
@@ -1099,7 +1264,7 @@ function renderSavingsComparisonSection(s) {
   const diff = userSave - median;
   const scaleMax = Math.max(100, userSave, median);
   const userPct = Math.min(100, Math.round((userSave / scaleMax) * 100));
-  const medianPct = Math.min(100, Math.round((median / scaleMax) * 100));
+  const medianPct = median > 0 ? Math.max(2, Math.min(100, Math.round((median / scaleMax) * 100))) : 0;
 
   const badgeHtml = diff > 0 ? `<span class="cmp-badge">${d.cmpAbove(diff)}</span>` : diff === 0 ? `<span class="cmp-badge">${d.cmpAt}</span>` : `<span class="cmp-badge below">${d.cmpBelow(Math.abs(diff))}</span>`;
   const noteText = diff > 0 ? d.cmpNoteAbove(diff) : diff === 0 ? d.cmpNoteAt : d.cmpNoteBelow(Math.abs(diff));
@@ -1107,11 +1272,11 @@ function renderSavingsComparisonSection(s) {
   el.innerHTML = `
     <div class="cmp-header"><strong style="font-size:14.5px;">${d.cmpTitle}</strong>${badgeHtml}</div>
     <div class="cmp-row">
-      <div class="cmp-row-top"><span>${d.cmpYour}</span><strong class="tabular" style="color:var(--s-green);">${userSave} € ${d.perMo}</strong></div>
+      <div class="cmp-row-top"><span>${d.cmpYour}</span><strong class="tabular" style="color:var(--s-green);">${fmtWholeEur(userSave)} ${d.perMo}</strong></div>
       <div class="cmp-track"><div class="cmp-fill-user" style="width:${userPct}%"></div></div>
     </div>
     <div class="cmp-row" style="margin-bottom:4px;">
-      <div class="cmp-row-top"><span style="color:var(--s-muted);">${d.cmpMedian}</span><strong class="tabular">${median} € ${d.perMo}</strong></div>
+      <div class="cmp-row-top"><span style="color:var(--s-muted);">${d.cmpMedian}</span><strong class="tabular">${fmtWholeEur(median)} ${d.perMo}</strong></div>
       <div class="cmp-track"><div class="cmp-fill-median" style="width:${medianPct}%"></div></div>
     </div>
     <div class="cmp-note">
@@ -1398,6 +1563,3 @@ document.getElementById("qpPrice").addEventListener("keydown", (e) => {
     submitQuickPurchase();
   }
 });
-
-
-  
