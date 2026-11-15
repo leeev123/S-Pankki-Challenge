@@ -15,6 +15,7 @@ from agent.prompts import SUUNTA_SYSTEM_PROMPT
 from agent.tools.finance_tools import (
     tool_find_savings_opportunities,
     tool_get_financial_summary,
+    tool_propose_deficit_budget,
     tool_simulate_category_cut,
     tool_simulate_purchase,
     tool_simulate_unexpected_expense,
@@ -31,17 +32,32 @@ _ACTIVE_MODEL: str | None = None
 _DISCOVERED_MODELS: list[str] | None = None
 
 AGENT_GUARDRAILS = """
-EHDOTTOMAT VALMENNUS- JA MUOTOILUSÄÄNNÖT:
-- Pidä vastaukset lyhyinä ja selkeinä (1–3 virkettä).
-- JOS käyttäjän `weekly_safe_to_spend_eur` on negatiivinen (miinuksella) tai suunnitelma vetää arjen liian tiukalle, HUOMAUTA tästä rakentavasti heti ja ohjaa kestävämpään säästöstrategiaan (esim. kuukausisäästön maltillistaminen, pidempi tavoiteaika tai ei-tärkeiden menojen karsinta).
-- KUN työkalu palauttaa toimintokortit, ÄLÄ luettele vaihtoehtoja tekstissä numeroituna listana! Kirjoita vain yksi lyhyt saatevirke (max 18 sanaa).
-- Jos hankinnan hinta puuttuu tai kyseessä on suuri päätös (esim. talo/asunto/auto), älä kutsu `simulate_purchase`, vaan kysy 1–2 tarkentavaa kysymystä.
+EHDOTTOMAT VALMENNUS- JA BUDJETOINTISÄÄNNÖT:
+- Kutsu aina ensin `get_financial_summary` tarkistaaksesi käyttäjän luvut.
+- JOS KUUKAUSIMENOT YLITTÄVÄT TULOT (`is_monthly_deficit == true`):
+  1. Älä koskaan piilota tai sivuuta alijäämää (`monthly_deficit_eur`).
+  2. Jos käyttäjä ei ole vielä kertonut elämäntilannettaan, alijäämän syytä ja miten rahoittaa erotuksen (esim. säästöt, opintolaina tai tuki), selvitä nämä ystävällisesti keskustellen (1–2 kysymystä kerrallaan).
+  3. Kun käyttäjä kertoo rahoituslähteen ja summan, kutsu `propose_deficit_budget`-työkalua.
+- Pidä vastaukset lyhyinä (1–3 virkettä). Kun työkalu palauttaa toimintokortit, ÄLÄ luettele vaihtoehtoja tekstissä!
 """.strip()
 
 TOOL_DECLARATIONS_JSON: list[dict[str, Any]] = [
     {
         "name": "get_financial_summary",
-        "description": "Hakee asiakkaan taloustilanteen: viikon käyttövaran, keskimääräisen kulutuksen, tulot, 3 kulutuskoria, puskurin ja prioriteetit.",
+        "description": "Hakee asiakkaan taloustilanteen: viikon käyttövaran, tulot, menot, mahdollisen kuukausialijäämän (is_monthly_deficit, monthly_deficit_eur), tilin saldon ja puskurin.",
+    },
+    {
+        "name": "propose_deficit_budget",
+        "description": "Muodostaa kestävän viikkobudjetin tilanteessa, jossa menot ylittävät tulot, kun rahoituslähde on selvitetty.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "funding_source": {"type": "STRING", "description": "Rahoituslähde, esim. 'opintolaina' / 'student loan' tai 'säästöt' / 'savings'."},
+                "monthly_funding_eur": {"type": "NUMBER", "description": "Kuukausittainen rahoitusosuus euroina."},
+                "everyday_trim_eur": {"type": "NUMBER", "description": "Mahdollinen arjen kulujen kevennys €/kk (oletus 0)."},
+            },
+            "required": ["funding_source", "monthly_funding_eur"],
+        },
     },
     {
         "name": "find_savings_opportunities",
@@ -49,11 +65,11 @@ TOOL_DECLARATIONS_JSON: list[dict[str, Any]] = [
     },
     {
         "name": "simulate_purchase",
-        "description": "Simuloi hinnaltaan tiedossa olevan hankinnan (alle 25 000 €) ja palauttaa toimintokortit. Älä kutsu tätä ilman hintaa tai asuntokaupoissa.",
+        "description": "Simuloi hinnaltaan tiedossa olevan hankinnan (alle 25 000 €) ja palauttaa toimintokortit. Älä kutsu ilman hintaa tai asuntokaupoissa.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "item_name": {"type": "STRING", "description": "Hankinnan nimi suomeksi."},
+                "item_name": {"type": "STRING", "description": "Hankinnan nimi."},
                 "price": {"type": "NUMBER", "description": "Hankinnan hinta euroina."},
             },
             "required": ["item_name", "price"],
@@ -65,7 +81,7 @@ TOOL_DECLARATIONS_JSON: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "category": {"type": "STRING", "description": "Kategorian nimi, esim. 'ravintolat', 'kahvilat'."},
+                "category": {"type": "STRING", "description": "Kategorian nimi."},
                 "reduction_pct": {"type": "NUMBER", "description": "Vähennysprosentti 1–90."},
             },
             "required": ["category", "reduction_pct"],
@@ -84,6 +100,49 @@ TOOL_DECLARATIONS_JSON: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+def _translate_card_en(card: dict[str, Any]) -> dict[str, Any]:
+    """Kääntää Python-työkalun suomenkielisen toimintokortin englanniksi, kun lang == 'en'."""
+    c = dict(card)
+    t = str(c.get("title") or "")
+    s = str(c.get("summary") or "")
+
+    rep_title = [
+        ("Rauhallinen tahti", "Steady pace"),
+        ("Reippaampi säästö", "Faster saving"),
+        ("Puskuri avuksi", "Use buffer"),
+        ("Kata puskurista", "Cover from buffer"),
+        ("Vahvista viikkobudjetti", "Confirm weekly budget"),
+        (" kk", " mo"),
+        ("€/vk", "€/wk"),
+    ]
+    for a, b in rep_title:
+        t = t.replace(a, b)
+
+    rep_sum = [
+        ("Säästö ", "Save "),
+        ("Lisäsäästö ", "Extra saving "),
+        (" arjesta", " from everyday budget"),
+        ("koossa ", "ready in "),
+        (" kk kuluttua.", " mo."),
+        ("Otat ", "Use "),
+        (" puskurista + säästät ", " from buffer + save "),
+        ("Vapauttaa ", "Frees up "),
+        (" säästöön.", " for savings."),
+        ("Täydennät puskurin takaisin 2 kk aikana", "Refill buffer over 2 months"),
+        ("Rahoitus (", "Funding ("),
+        (") huomioitu. Arjen käyttöbudjetiksi asetetaan ", ") applied. Everyday budget set to "),
+        ("€/vk", "€/wk"),
+        ("€/kk", "€/mo"),
+        (" kk", " mo"),
+    ]
+    for a, b in rep_sum:
+        s = s.replace(a, b)
+
+    c["title"] = t
+    c["summary"] = s
+    return c
 
 
 def get_active_model_name() -> str:
@@ -142,7 +201,7 @@ def _to_float(value: Any, default: float = 0.0) -> float:
 
 def _extract_optional_euro(text: str) -> float | None:
     cleaned = text.replace(" ", "")
-    match = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:€|eur|euroa|e\b|tonni)?", cleaned, re.IGNORECASE)
+    match = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:€|eur|euroa|e\b|tonni|k\b)?", cleaned, re.IGNORECASE)
     if not match:
         return None
     val = _to_float(match.group(1), 0.0)
@@ -151,14 +210,14 @@ def _extract_optional_euro(text: str) -> float | None:
     return val if val > 0 else None
 
 
-def _strip_redundant_list_when_cards(text: str, has_cards: bool) -> str:
+def _strip_redundant_list_when_cards(text: str, has_cards: bool, lang: str) -> str:
     if not has_cards or not text:
         return text
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     kept = [ln for ln in lines if not re.match(r"^(\d+[\.\)]|[-•*])\s+", ln)]
     compact = " ".join(kept).strip()
     if not compact:
-        return "Valitse alta sopivin vaihtoehto tai säädä tahtia liukusäätimellä:"
+        return "Choose a suitable option below or adjust the timeline:" if lang == "en" else "Valitse alta sopivin vaihtoehto tai säädä tahtia liukusäätimellä:"
     sentences = re.split(r"(?<=[.!?])\s+", compact)
     return " ".join(sentences[:2]).strip()
 
@@ -187,16 +246,22 @@ def _build_rest_contents(history: list[dict[str, Any]], user_message: str) -> li
 def _execute_tool(statement_id: str, tool_name: str, args: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     if tool_name == "get_financial_summary":
         return tool_get_financial_summary(statement_id), None
+    if tool_name == "propose_deficit_budget":
+        src = str(args.get("funding_source") or "omat varat").strip()
+        amt = max(0.0, _to_float(args.get("monthly_funding_eur"), 0.0))
+        trim = max(0.0, _to_float(args.get("everyday_trim_eur"), 0.0))
+        res = tool_propose_deficit_budget(statement_id, src, amt, trim)
+        return res, [res["action_card"]]
     if tool_name == "find_savings_opportunities":
         return tool_find_savings_opportunities(statement_id), None
     if tool_name == "simulate_purchase":
         item_name = str(args.get("item_name") or "").strip()
         price = _to_float(args.get("price"), 0.0)
-        housing_words = ("talo", "asunto", "omakotitalo", "kaksio", "yksiö", "kolmio", "kiinteistö")
+        housing_words = ("talo", "asunto", "omakotitalo", "kaksio", "yksiö", "kolmio", "house", "apartment", "flat")
         if price <= 0 or price > 25000 or any(w in item_name.lower() for w in housing_words):
             snap = tool_get_financial_summary(statement_id)
-            return {"note": "Kysy tarkentava kysymys hintaluokasta, säästöistä ja aikataulusta.", "financial_summary": snap}, []
-        sim = tool_simulate_purchase(statement_id, item_name or "hankinta", price)
+            return {"note": "Ask 1–2 clarifying questions about target price range, savings/down payment, and timeline.", "financial_summary": snap}, []
+        sim = tool_simulate_purchase(statement_id, item_name or "purchase", price)
         return sim, list(sim.get("options", []))
     if tool_name == "simulate_category_cut":
         category = str(args.get("category") or "ravintolat").strip() or "ravintolat"
@@ -206,14 +271,14 @@ def _execute_tool(statement_id: str, tool_name: str, args: dict[str, Any]) -> tu
         cards = [card] if isinstance(card, dict) and cut_res.get("monthly_savings_eur", 0) > 0 else []
         return cut_res, cards
     if tool_name == "simulate_unexpected_expense":
-        desc = str(args.get("description") or "yllättävä meno").strip() or "yllättävä meno"
+        desc = str(args.get("description") or "expense").strip() or "expense"
         price = max(0.0, _to_float(args.get("price"), 0.0))
         if price <= 0:
-            return {"error": "Kysy käyttäjältä menon summa."}, []
+            return {"error": "Ask the user for the expense amount."}, []
         exp_res = tool_simulate_unexpected_expense(statement_id, desc, price)
         card = exp_res.get("action_card")
         return exp_res, ([card] if isinstance(card, dict) else None)
-    return {"error": f"Tuntematon työkalu: {tool_name}"}, None
+    return {"error": f"Unknown tool: {tool_name}"}, None
 
 
 def _call_gemini_rest(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -242,13 +307,18 @@ def _call_gemini_rest(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
     raise RuntimeError(f"Gemini REST -kutsu epaonnistui: {last_error}")
 
 
-def _run_gemini_agent(statement_id: str, user_message: str, history: list[dict[str, Any]]) -> dict[str, Any]:
+def _run_gemini_agent(statement_id: str, user_message: str, history: list[dict[str, Any]], lang: str = "fi") -> dict[str, Any]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key or api_key in ("MY_GEMINI_API_KEY", "your_api_key_here"):
         raise RuntimeError("GEMINI_API_KEY puuttuu.")
 
+    lang_rule = (
+        "\n\nLANGUAGE RULE: The user interface language is ENGLISH. Respond STRICTLY in clear, natural English!"
+        if lang == "en"
+        else "\n\nKIELISÄÄNTÖ: Vastaa selkeällä ja luonnollisella suomen kielellä."
+    )
     contents = _build_rest_contents(history, user_message)
-    system_instruction = f"{SUUNTA_SYSTEM_PROMPT.strip()}\n\n{AGENT_GUARDRAILS}"
+    system_instruction = f"{SUUNTA_SYSTEM_PROMPT.strip()}\n\n{AGENT_GUARDRAILS}{lang_rule}"
     action_cards: list[dict[str, Any]] = []
     final_reply = ""
 
@@ -284,49 +354,51 @@ def _run_gemini_agent(statement_id: str, user_message: str, history: list[dict[s
             args = fc.get("args") if isinstance(fc.get("args"), dict) else {}
             result, new_cards = _execute_tool(statement_id, tool_name, args)
             if new_cards is not None:
-                action_cards = new_cards
+                action_cards = [_translate_card_en(c) for c in new_cards] if lang == "en" else new_cards
             fn_responses.append({"functionResponse": {"name": tool_name, "response": {"result": result}}})
         if not fn_responses:
             break
         contents.append({"role": "user", "parts": fn_responses})
 
-    final_reply = _strip_redundant_list_when_cards(final_reply, bool(action_cards))
+    final_reply = _strip_redundant_list_when_cards(final_reply, bool(action_cards), lang)
     if not final_reply:
-        final_reply = "Valitse alta sopivin vaihtoehto tai säädä oma tahti liukusäätimellä:" if action_cards else "Kerrotko hieman tarkemmin tavoitteestasi?"
+        final_reply = (
+            ("Choose an option below:" if action_cards else "Could you tell me a bit more about your goal?")
+            if lang == "en"
+            else ("Valitse alta sopivin vaihtoehto:" if action_cards else "Kerrotko hieman tarkemmin tilanteestasi?")
+        )
     return {"reply": final_reply, "action_cards": action_cards}
 
 
-def _run_fallback_agent(statement_id: str, user_message: str) -> dict[str, Any]:
+def _run_fallback_agent(statement_id: str, user_message: str, lang: str = "fi") -> dict[str, Any]:
     snap = tool_get_financial_summary(statement_id)
     msg = user_message.lower()
     price = _extract_optional_euro(user_message)
-    safe = snap["weekly_safe_to_spend_eur"]
 
-    if any(w in msg for w in ("talo", "asunto", "omakotitalo", "asuntolaina")):
+    if any(w in msg for w in ("ostaa", "ostan", "buy", "purchase", "pyörä", "läppäri", "bike", "laptop")) and price:
+        sim = tool_simulate_purchase(statement_id, "purchase" if lang == "en" else "hankinta", price)
+        cards = [_translate_card_en(c) for c in sim.get("options", [])] if lang == "en" else list(sim.get("options", []))
         return {
-            "reply": f"Tulosi ovat keskimäärin **{snap['monthly_income_eur']:.0f} €/kk** ja puskurisi **{snap['profile'].get('current_buffer_eur', 850):.0f} €**. Minkä hintaluokan asuntoa tai taloa mietit ja millä aikataululla?",
+            "reply": "Choose a suitable pace below:" if lang == "en" else "Valitse alta sopivin vaihtoehto:",
+            "action_cards": cards,
+        }
+
+    if lang == "en":
+        return {
+            "reply": f"Your weekly budget is **{snap['weekly_budget_eur']:.0f} €/wk** and remaining allowance is **{snap['weekly_safe_to_spend_eur']:.0f} €**.",
             "action_cards": [],
         }
-    if any(w in msg for w in ("ostaa", "ostan", "pyörä", "läppäri", "puhelin", "hankinta")):
-        if price is None:
-            return {"reply": "Minkä hintaista hankintaa suunnittelet?", "action_cards": []}
-        sim = tool_simulate_purchase(statement_id, "hankinta", price)
-        prefix = "Huomaa, että tämän viikon käyttövarasi on jo miinuksella — suosittelen rauhallista säästötahtia:" if safe < 0 else "Valitse alta sopivin vaihtoehto tai säädä oma tahti liukusäätimellä:"
-        return {"reply": prefix, "action_cards": list(sim.get("options", []))}
-
-    if safe < 0:
-        return {
-            "reply": f"Huomio: Tämän viikon käyttövarasi on **{safe:.0f} €** miinuksella. Suosittelen keventämään kuukausisäästöä *Säädä*-painikkeesta, jotta arki pysyy kestävällä pohjalla.",
-            "action_cards": [],
-        }
-    return {"reply": f"Viikon käyttövarasi on **{safe:.0f} €** (budjetti {snap['weekly_budget_eur']:.0f} €/vk). Miten voin auttaa?", "action_cards": []}
+    return {
+        "reply": f"Viikkobudjettisi on **{snap['weekly_budget_eur']:.0f} €/vk** ja jäljellä oleva käyttövara **{snap['weekly_safe_to_spend_eur']:.0f} €**.",
+        "action_cards": [],
+    }
 
 
-def run_agent(statement_id: str, user_message: str, history: list[dict[str, Any]]) -> dict[str, Any]:
+def run_agent(statement_id: str, user_message: str, history: list[dict[str, Any]], lang: str = "fi") -> dict[str, Any]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if api_key and api_key not in ("MY_GEMINI_API_KEY", "your_api_key_here"):
         try:
-            return _run_gemini_agent(statement_id, user_message, history)
+            return _run_gemini_agent(statement_id, user_message, history, lang=lang)
         except Exception as exc:
             logger.warning("Gemini-kutsu epaonnistui, kaytetaan varalogiikkaa: %s", exc)
-    return _run_fallback_agent(statement_id, user_message)
+    return _run_fallback_agent(statement_id, user_message, lang=lang)

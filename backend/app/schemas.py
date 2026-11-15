@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 class OnboardingRequest(BaseModel):
     statement_id: str = "DEMO_TILIOTE"
+    lang: str = "fi"
     suunta_enabled: bool = True
     monthly_income_eur: float | None = None
     mandatory_regular_eur: float | None = None
@@ -17,10 +18,12 @@ class OnboardingRequest(BaseModel):
 class ChatRequest(BaseModel):
     statement_id: str = "DEMO_TILIOTE"
     message: str
+    lang: str = "fi"
 
 
 class ApplyPlanRequest(BaseModel):
     statement_id: str = "DEMO_TILIOTE"
+    lang: str = "fi"
     plan_id: str
     title: str
     monthly_savings_delta_eur: float = 0.0

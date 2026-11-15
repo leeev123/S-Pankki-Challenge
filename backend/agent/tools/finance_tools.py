@@ -1,9 +1,5 @@
-"""
-Työkalut (Tools), joita tekoälyagentti kutsuu.
-Kaikki matemaattinen laskenta tehdään engine.py- ja suunta_engine.py-moduuleissa.
-"""
-
 from finance.engine import (
+    build_deficit_budget_plan,
     find_savings_opportunities_for_statement,
     get_financial_snapshot,
     simulate_category_cut,
@@ -30,3 +26,12 @@ def tool_simulate_category_cut(statement_id: str, category_name: str, cut_percen
 
 def tool_simulate_unexpected_expense(statement_id: str, description: str, price_eur: float) -> dict:
     return simulate_unexpected_expense(statement_id, description, price_eur)
+
+
+def tool_propose_deficit_budget(
+    statement_id: str,
+    funding_source: str,
+    monthly_funding_eur: float,
+    everyday_trim_eur: float = 0.0,
+) -> dict:
+    return build_deficit_budget_plan(statement_id, funding_source, monthly_funding_eur, everyday_trim_eur)

@@ -82,7 +82,6 @@ def list_customers() -> list[dict[str, Any]]:
             "display_name": csv_name,
             "role_label": role_label,
             "customer_age": str(row.get("customer_age", "")).strip(),
-            "customer_postal_code": str(row.get("customer_postal_code", "")).strip(),
             "account_balance_eur": round(balance, 2),
         })
     return customers
@@ -140,7 +139,6 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     profile["display_name"] = cust_info["display_name"]
     profile["role_label"] = cust_info["role_label"]
     profile["customer_age"] = cust_info["customer_age"]
-    profile["customer_postal_code"] = cust_info["customer_postal_code"]
 
     fe = _build_financial_engine(df, profile)
     as_of = fe.as_of
@@ -165,32 +163,45 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     current_buffer_cents = cents(profile.get("current_buffer_eur", 850.0))
     irregular_reserve_cents = max(3500, proportional(avg_irregular_c, 110, 100))
 
+    total_monthly_expenses_c = avg_regular_c + irregular_reserve_cents + avg_everyday_c
+    monthly_cashflow_balance_c = avg_income_c - total_monthly_expenses_c
+    is_monthly_deficit = monthly_cashflow_balance_c < 0
+    monthly_deficit_c = abs(monthly_cashflow_balance_c) if is_monthly_deficit else 0
+
     net_before_everyday_c = avg_income_c - avg_regular_c - irregular_reserve_cents
     if profile.get("onboarded"):
-        savings_target_cents = cents(profile.get("monthly_savings_target_eur", 100.0))
+        savings_target_cents = cents(profile.get("monthly_savings_target_eur", 0.0))
     else:
-        surplus_after_avg = net_before_everyday_c - avg_everyday_c
-        savings_target_cents = min(25000, proportional(surplus_after_avg, 40, 100)) if surplus_after_avg > 5000 else 0
-        profile["monthly_savings_target_eur"] = cents_to_eur(savings_target_cents)
+        savings_target_cents = 0
+        profile["monthly_savings_target_eur"] = 0.0
 
     everyday_adj_cents = cents(profile.get("everyday_adjustment_eur", 0.0))
-    sustainable_from_income_c = net_before_everyday_c - savings_target_cents
 
-    if sustainable_from_income_c >= avg_everyday_c and avg_everyday_c > 0:
-        base_monthly_everyday_c = avg_everyday_c
-    elif sustainable_from_income_c > 12000:
-        base_monthly_everyday_c = sustainable_from_income_c
+    # 1) Määritetään arjen peruskulutustaso ennen säästötavoitetta (zero_save_everyday_c)
+    if not is_monthly_deficit:
+        zero_save_everyday_c = min(avg_everyday_c, net_before_everyday_c) if avg_everyday_c > 0 else net_before_everyday_c
     else:
-        liquid_runway_monthly_c = proportional(max(0, account_balance_cents - 85000), 1, 9)
-        realistic_cap_c = max(14000, sustainable_from_income_c + liquid_runway_monthly_c)
-        base_monthly_everyday_c = min(avg_everyday_c, realistic_cap_c) if avg_everyday_c > 0 else realistic_cap_c
+        confirmed_funding_c = cents(profile.get("deficit_monthly_funding_eur", 0.0))
+        if confirmed_funding_c > 0:
+            real_monthly_resources_c = avg_income_c + confirmed_funding_c
+        else:
+            safety_floor_c = min(50000, proportional(max(0, account_balance_cents), 20, 100))
+            usable_reserve_monthly_c = proportional(max(0, account_balance_cents - safety_floor_c), 1, 12)
+            real_monthly_resources_c = avg_income_c + usable_reserve_monthly_c
 
-    monthly_everyday_budget_cents = max(10000, base_monthly_everyday_c + everyday_adj_cents)
+        real_room_before_save_c = real_monthly_resources_c - avg_regular_c - irregular_reserve_cents
+        if real_room_before_save_c > 0:
+            zero_save_everyday_c = min(avg_everyday_c, real_room_before_save_c) if avg_everyday_c > 0 else real_room_before_save_c
+        else:
+            fallback_pool_c = max(avg_income_c, proportional(max(0, account_balance_cents), 1, 6))
+            zero_save_everyday_c = max(6000, proportional(fallback_pool_c, 18, 100))
+
+    # 2) Jokainen euro säästötavoitteessa pienentää suoraan arjen kuukausi- ja viikkobudjettia kaikilla profiileilla!
+    monthly_everyday_budget_cents = zero_save_everyday_c - savings_target_cents + everyday_adj_cents
     weekly_budget_cents = monthly_to_weekly(monthly_everyday_budget_cents)
     weekly_safe_cents = weekly_budget_cents - spent_week_cents
     daily_safe_cents = proportional(max(0, weekly_safe_cents), 1, 4)
 
-    # Sekä arjen ostokategoriat että suurimmat kiinteät menot
     everyday_cats_eur: dict[str, float] = {}
     everyday_cats_fi: list[dict[str, Any]] = []
     mandatory_cats_fi: list[dict[str, Any]] = []
@@ -211,7 +222,7 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     protected_cats = priorities_to_protected_categories(profile.get("priorities"))
     opportunities_data = fe.find_savings_opportunities(protected_categories=protected_cats, months=3)
     forecast_6m = fe.get_financial_forecast(
-        monthly_everyday_budget_cents=monthly_everyday_budget_cents,
+        monthly_everyday_budget_cents=max(0, monthly_everyday_budget_cents),
         monthly_savings_cents=savings_target_cents,
         months=6,
         starting_checking_cents=account_balance_cents,
@@ -240,6 +251,11 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
         "transaction_count": int(len(df)),
         "account_balance_eur": cents_to_eur(account_balance_cents),
         "monthly_income_eur": cents_to_eur(avg_income_c),
+        "total_monthly_expenses_eur": cents_to_eur(total_monthly_expenses_c),
+        "monthly_cashflow_balance_eur": cents_to_eur(monthly_cashflow_balance_c),
+        "is_monthly_deficit": is_monthly_deficit,
+        "monthly_deficit_eur": cents_to_eur(monthly_deficit_c),
+        "zero_save_everyday_monthly_eur": cents_to_eur(zero_save_everyday_c),
         "average_everyday_monthly_eur": cents_to_eur(avg_everyday_c),
         "weekly_budget_eur": cents_to_eur(weekly_budget_cents),
         "spent_this_week_eur": cents_to_eur(spent_week_cents),
@@ -264,6 +280,53 @@ def get_financial_snapshot(statement_id: str = "CUST_STUDENT_01") -> dict[str, A
     }
 
 
+def build_deficit_budget_plan(
+    statement_id: str,
+    funding_source: str,
+    monthly_funding_eur: float,
+    everyday_trim_eur: float = 0.0,
+) -> dict[str, Any]:
+    snap = get_financial_snapshot(statement_id)
+    funding_c = max(0, cents(monthly_funding_eur))
+    trim_c = max(0, cents(everyday_trim_eur))
+
+    income_c = cents(snap["monthly_income_eur"])
+    regular_c = cents(snap["baskets_30d"]["mandatory_regular_eur"])
+    irreg_c = cents(snap["baskets_30d"]["irregular_reserve_eur"])
+    avg_evd_c = cents(snap["average_everyday_monthly_eur"])
+    cur_evd_budget_c = cents(snap["baskets_30d"]["monthly_everyday_budget_eur"])
+
+    available_for_everyday_c = income_c + funding_c - regular_c - irreg_c
+    target_everyday_c = max(6000, min(max(6000, avg_evd_c - trim_c), available_for_everyday_c))
+    new_weekly_eur = cents_to_eur(monthly_to_weekly(target_everyday_c))
+    delta_evd_eur = cents_to_eur(target_everyday_c - cur_evd_budget_c)
+    delta_wk_eur = cents_to_eur(monthly_to_weekly(target_everyday_c - cur_evd_budget_c))
+
+    clean_source = funding_source.strip() or "rahoituspuskuri"
+    card = {
+        "plan_id": f"deficit_plan_{int(monthly_funding_eur)}_{int(everyday_trim_eur)}",
+        "title": f"Vahvista viikkobudjetti {new_weekly_eur:.0f} €/vk",
+        "summary": (
+            f"Rahoitus ({clean_source}: +{monthly_funding_eur:.0f} €/kk) huomioitu. "
+            f"Arjen käyttöbudjetiksi asetetaan {cents_to_eur(target_everyday_c):.0f} €/kk ({new_weekly_eur:.0f} €/vk)."
+        ),
+        "impact_weekly_eur": round(delta_wk_eur, 1),
+        "impact_savings_months": 12,
+        "monthly_savings_delta_eur": 0.0,
+        "everyday_budget_delta_eur": delta_evd_eur,
+        "buffer_delta_eur": 0.0,
+        "goal_name": f"Rahoitus: {clean_source} ({monthly_funding_eur:.0f} €/kk)",
+        "goal_target_eur": round(monthly_funding_eur, 0),
+    }
+    return {
+        "funding_source": clean_source,
+        "monthly_funding_eur": round(monthly_funding_eur, 2),
+        "new_weekly_budget_eur": new_weekly_eur,
+        "new_monthly_everyday_budget_eur": cents_to_eur(target_everyday_c),
+        "action_card": card,
+    }
+
+
 def find_savings_opportunities_for_statement(statement_id: str) -> dict[str, Any]:
     snap = get_financial_snapshot(statement_id)
     return {"protected_priorities": snap["profile"].get("priorities", []), "opportunities": snap.get("savings_opportunities", [])}
@@ -275,43 +338,51 @@ def simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> di
     clean_price = cents_to_eur(price_c)
     current_save_c = cents(snap["baskets_30d"]["monthly_savings_target_eur"])
     buffer_c = cents(snap["profile"].get("current_buffer_eur", 850.0))
+    wk_budget = max(20.0, float(snap["weekly_budget_eur"]))
+    wk_safe = float(snap["weekly_safe_to_spend_eur"])
 
-    if current_save_c >= 4300:
-        steady_monthly_c, steady_delta_m_c, steady_delta_w_eur = current_save_c, 0, 0.0
+    max_safe_cut_wk = max(3.0, math.floor(min(wk_budget * 0.28, max(4.0, wk_safe * 0.75))))
+    gentle_cut_wk = max(2.0, math.floor(max_safe_cut_wk * 0.5))
+
+    if current_save_c >= 3500:
+        steady_delta_w, steady_delta_m_c, steady_total_m_c = 0.0, 0, current_save_c
     else:
-        steady_delta_w_eur = -10.0
-        steady_delta_m_c = _weekly_to_monthly_cents(1000)
-        steady_monthly_c = current_save_c + steady_delta_m_c
+        steady_delta_w = -gentle_cut_wk
+        steady_delta_m_c = _weekly_to_monthly_cents(cents(gentle_cut_wk))
+        steady_total_m_c = current_save_c + steady_delta_m_c
 
-    months_steady = max(1, math.ceil(price_c / steady_monthly_c))
-    steady_w_total = cents_to_eur(monthly_to_weekly(steady_monthly_c))
-    steady_m_total = cents_to_eur(steady_monthly_c)
+    months_steady = max(1, math.ceil(price_c / max(800, steady_total_m_c)))
+    steady_w_total = cents_to_eur(monthly_to_weekly(steady_total_m_c))
+    steady_m_total = cents_to_eur(steady_total_m_c)
     steady_delta_m_eur = cents_to_eur(steady_delta_m_c)
 
-    fast_delta_m_c = steady_delta_m_c + _weekly_to_monthly_cents(2500)
-    fast_monthly_c = current_save_c + fast_delta_m_c
-    months_fast = max(1, math.ceil(price_c / fast_monthly_c))
+    fast_cut_w = max(gentle_cut_wk + 3.0, max_safe_cut_wk)
+    if wk_budget - fast_cut_w < 15.0:
+        fast_cut_w = max(2.0, math.floor(max(2.0, wk_budget - 15.0)))
+    fast_delta_m_c = _weekly_to_monthly_cents(cents(fast_cut_w))
+    fast_total_m_c = current_save_c + fast_delta_m_c
+    months_fast = max(1, math.ceil(price_c / max(1000, fast_total_m_c)))
     fast_delta_m_eur = cents_to_eur(fast_delta_m_c)
-    fast_total_w_cut = round(abs(steady_delta_w_eur) + 25.0, 0)
 
-    buffer_use_c = min(proportional(buffer_c, 50, 100), proportional(price_c, 40, 100))
+    buffer_use_c = min(proportional(buffer_c, 40, 100), proportional(price_c, 40, 100))
     remaining_c = max(0, price_c - buffer_use_c)
-    hybrid_delta_m_c = steady_delta_m_c + _weekly_to_monthly_cents(1500)
-    hybrid_monthly_c = max(4300, current_save_c + hybrid_delta_m_c)
-    months_hybrid = max(1, math.ceil(remaining_c / hybrid_monthly_c)) if remaining_c > 0 else 1
+    hyb_cut_w = gentle_cut_wk
+    hyb_delta_m_c = _weekly_to_monthly_cents(cents(hyb_cut_w))
+    hyb_total_m_c = max(1000, current_save_c + hyb_delta_m_c)
+    months_hybrid = max(1, math.ceil(remaining_c / hyb_total_m_c)) if remaining_c > 0 else 1
     buffer_use_eur = cents_to_eur(buffer_use_c)
-    hybrid_delta_m_eur = cents_to_eur(hybrid_delta_m_c)
-    hybrid_w_cut = round(abs(steady_delta_w_eur) + 15.0, 0)
+    hyb_delta_m_eur = cents_to_eur(hyb_delta_m_c)
 
     return {
         "item_name": item_name,
         "price_eur": clean_price,
+        "max_safe_weekly_cut_eur": max_safe_cut_wk,
         "options": [
             {
                 "plan_id": f"save_steady_{int(clean_price)}",
-                "title": "Rauhallinen tahti",
-                "summary": f"Säästö {steady_w_total:.0f} €/vk ({steady_m_total:.0f} €/kk) · valmis {months_steady} kk kuluttua.",
-                "impact_weekly_eur": steady_delta_w_eur,
+                "title": f"Rauhallinen tahti ({months_steady} kk)",
+                "summary": f"Säästö {steady_w_total:.0f} €/vk ({steady_m_total:.0f} €/kk) · koossa {months_steady} kk kuluttua.",
+                "impact_weekly_eur": steady_delta_w,
                 "impact_savings_months": months_steady,
                 "monthly_savings_delta_eur": steady_delta_m_eur,
                 "everyday_budget_delta_eur": -steady_delta_m_eur,
@@ -321,9 +392,9 @@ def simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> di
             },
             {
                 "plan_id": f"trim_everyday_{int(clean_price)}",
-                "title": "Nopeutettu säästö",
-                "summary": f"Lisäsäästö -{fast_total_w_cut:.0f} €/vk (-{fast_delta_m_eur:.0f} €/kk arjesta) · valmis {months_fast} kk kuluttua.",
-                "impact_weekly_eur": -fast_total_w_cut,
+                "title": f"Reippaampi säästö ({months_fast} kk)",
+                "summary": f"Lisäsäästö -{fast_cut_w:.0f} €/vk (-{fast_delta_m_eur:.0f} €/kk arjesta) · koossa {months_fast} kk kuluttua.",
+                "impact_weekly_eur": -fast_cut_w,
                 "impact_savings_months": months_fast,
                 "monthly_savings_delta_eur": fast_delta_m_eur,
                 "everyday_budget_delta_eur": -fast_delta_m_eur,
@@ -334,11 +405,11 @@ def simulate_purchase(statement_id: str, item_name: str, price_eur: float) -> di
             {
                 "plan_id": f"hybrid_buffer_{int(clean_price)}",
                 "title": f"Puskuri avuksi ({buffer_use_eur:.0f} €)",
-                "summary": f"Käytät {buffer_use_eur:.0f} € puskurista + säästät -{hybrid_w_cut:.0f} €/vk (-{hybrid_delta_m_eur:.0f} €/kk) · valmis {months_hybrid} kk.",
-                "impact_weekly_eur": -hybrid_w_cut,
+                "summary": f"Otat {buffer_use_eur:.0f} € puskurista + säästät -{hyb_cut_w:.0f} €/vk (-{hyb_delta_m_eur:.0f} €/kk) · {months_hybrid} kk.",
+                "impact_weekly_eur": -hyb_cut_w,
                 "impact_savings_months": months_hybrid,
-                "monthly_savings_delta_eur": hybrid_delta_m_eur,
-                "everyday_budget_delta_eur": -hybrid_delta_m_eur,
+                "monthly_savings_delta_eur": hyb_delta_m_eur,
+                "everyday_budget_delta_eur": -hyb_delta_m_eur,
                 "buffer_delta_eur": -buffer_use_eur,
                 "goal_name": item_name,
                 "goal_target_eur": clean_price,
